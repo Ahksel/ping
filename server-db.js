@@ -49,27 +49,45 @@ class PongServerDB {
     async initDatabase() {
         try {
             console.log('🔌 Tentativo connessione MongoDB...');
-            console.log('📍 URL:', this.mongoUrl ? 'Configurato' : 'NON configurato');
+            console.log('📍 URL MongoDB:', this.mongoUrl);
+            console.log('🔗 URL nascosto:', this.mongoUrl.replace(/:[^:@]*@/, ':***@'));
             
-            this.client = new MongoClient(this.mongoUrl);
+            this.client = new MongoClient(this.mongoUrl, {
+                connectTimeoutMS: 10000,
+                serverSelectionTimeoutMS: 10000,
+            });
+            
+            console.log('⏳ Connessione in corso...');
             await this.client.connect();
+            console.log('🔗 Client connesso, testando database...');
+            
             this.db = this.client.db(this.dbName);
             
-            // Test connessione
+            // Test connessione con ping
+            console.log('🏓 Ping al database...');
             await this.db.admin().ping();
+            console.log('✅ Ping riuscito!');
             
             // Crea collezioni se non esistono
+            console.log('📁 Creazione collezioni...');
             await this.db.createCollection('users');
             await this.db.collection('users').createIndex({ username: 1 }, { unique: true });
+            console.log('📁 Collezioni create!');
             
             // Crea utenti demo se non esistono
             await this.createDemoUsers();
             
             console.log('✅ Database MongoDB connesso e pronto!');
         } catch (error) {
-            console.error('❌ Errore inizializzazione database:', error.message);
+            console.error('❌ Errore dettagliato database:');
+            console.error('   - Tipo errore:', error.name);
+            console.error('   - Messaggio:', error.message);
+            console.error('   - Codice:', error.code);
+            if (error.cause) {
+                console.error('   - Causa:', error.cause);
+            }
             console.log('⚠️  Continuo senza database - userò utenti demo in memoria');
-            this.db = null; // Forza fallback
+            this.db = null;
             this.createDemoUsersInMemory();
         }
     }
