@@ -670,7 +670,129 @@
             }
 
             showAbout() {
-                alert('🏓 Pong Ultimate v2.0\n\nCreato per giocare con amici online!\n\n• Single Player vs AI\n• Multiplayer online\n• Controlli touch mobile\n• Sistema lobby\n\nDivertiti! 🎮');
+                alert('🏓 Pong Ultimate v2.0\n\nCreato per giocare con amici online!\n\n• Single Player vs AI\n• Multiplayer online\n• Controlli touch mobile\n• Sistema lobby\n• Sistema utenti con statistiche\n• Controlli mouse\n\nDivertiti! 🎮');
+            }
+
+            // SISTEMA UTENTI
+            login(username, password) {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({
+                        type: 'login',
+                        username: username,
+                        password: password
+                    }));
+                } else {
+                    // Connetti prima al server per login
+                    this.connectForAuth(() => {
+                        this.ws.send(JSON.stringify({
+                            type: 'login',
+                            username: username,
+                            password: password
+                        }));
+                    });
+                }
+            }
+
+            register(username, password) {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({
+                        type: 'register',
+                        username: username,
+                        password: password
+                    }));
+                } else {
+                    this.connectForAuth(() => {
+                        this.ws.send(JSON.stringify({
+                            type: 'register',
+                            username: username,
+                            password: password
+                        }));
+                    });
+                }
+            }
+
+            connectForAuth(callback) {
+                const isGlitch = window.location.hostname.includes('glitch.me');
+                const serverUrl = isGlitch ? `wss://${window.location.hostname}` : 
+                                            `ws://${this.settings.serverIP}:${this.settings.serverPort}`;
+                
+                this.ws = new WebSocket(serverUrl);
+                this.ws.onopen = () => {
+                    if (callback) callback();
+                };
+                this.ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    this.handleAuthMessage(data);
+                };
+                this.ws.onerror = (error) => {
+                    console.error('Errore connessione auth:', error);
+                    document.getElementById('loginMessage').textContent = 'Errore di connessione al server';
+                    document.getElementById('loginMessage').style.color = '#ff4444';
+                };
+            }
+
+            handleAuthMessage(data) {
+                console.log('Messaggio ricevuto:', data);
+                switch (data.type) {
+                    case 'loginResult':
+                        if (data.success) {
+                            this.currentUser = {
+                                username: data.username,
+                                stats: data.stats
+                            };
+                            localStorage.setItem('pong_user', JSON.stringify(this.currentUser));
+                            this.showMainMenu();
+                            document.getElementById('loginMessage').textContent = '';
+                        } else {
+                            document.getElementById('loginMessage').textContent = data.message;
+                            document.getElementById('loginMessage').style.color = '#ff4444';
+                        }
+                        break;
+                    case 'registerResult':
+                        if (data.success) {
+                            document.getElementById('loginMessage').textContent = data.message;
+                            document.getElementById('loginMessage').style.color = '#00ff88';
+                        } else {
+                            document.getElementById('loginMessage').textContent = data.message;
+                            document.getElementById('loginMessage').style.color = '#ff4444';
+                        }
+                        break;
+                    case 'userStats':
+                        this.showStatsModal(data.username, data.stats);
+                        break;
+                    default:
+                        // Passa altri messaggi al gestore normale
+                        this.handleServerMessage(data);
+                        break;
+                }
+            }
+
+            logout() {
+                localStorage.removeItem('pong_user');
+                this.currentUser = null;
+                if (this.ws) {
+                    this.ws.close();
+                    this.ws = null;
+                }
+                this.showScreen('loginScreen');
+                document.getElementById('loginMessage').textContent = '';
+                document.getElementById('loginUsername').value = '';
+                document.getElementById('loginPassword').value = '';
+            }
+
+            getUserStats() {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({ type: 'getStats' }));
+                }
+            }
+
+            showStatsModal(username, stats) {
+                const winRate = stats.games > 0 ? ((stats.wins / stats.games) * 100).toFixed(1) : 0;
+                alert(`📊 Statistiche di ${username}\n\n` +
+                      `🏆 Vittorie: ${stats.wins}\n` +
+                      `💔 Sconfitte: ${stats.losses}\n` +
+                      `🎮 Partite totali: ${stats.games}\n` +
+                      `📈 Percentuale vittorie: ${winRate}%`);
             }
 
             // IMPOSTAZIONI
