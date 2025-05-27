@@ -510,6 +510,16 @@
 
             // IMPOSTAZIONI
             loadSettings() {
+                // Auto-rileva se siamo su Glitch o altri servizi
+                const isOnlineService = window.location.hostname.includes('glitch.me') || 
+                                      window.location.hostname.includes('onrender.com') ||
+                                      window.location.hostname !== 'localhost';
+                
+                if (isOnlineService) {
+                    this.settings.serverIP = window.location.hostname;
+                    this.settings.serverPort = window.location.port || (window.location.protocol === 'https:' ? 443 : 80);
+                }
+
                 document.getElementById('ballSpeed').value = this.settings.ballSpeed;
                 document.getElementById('paddleSize').value = this.settings.paddleSize;
                 document.getElementById('serverIP').value = this.settings.serverIP;
@@ -571,47 +581,50 @@
             }
 
             connectToServer() {
-                // Rileva automaticamente se siamo su HTTPS per usare wss://
+                // Su Glitch usa sempre lo stesso host ma con WebSocket sicuro
+                const isGlitch = window.location.hostname.includes('glitch.me');
                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const serverUrl = `${protocol}//${this.settings.serverIP}:${this.settings.serverPort}`;
                 
-                // Se siamo su Glitch o servizi simili, usa la porta corrente
-                if (this.settings.serverIP.includes('glitch.me') || 
-                    this.settings.serverIP.includes('onrender.com') ||
-                    window.location.hostname !== 'localhost') {
-                    const port = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
-                    const finalUrl = `${protocol}//${this.settings.serverIP}`;
-                    document.getElementById('lobbyStatus').textContent = `Connessione a ${finalUrl}...`;
-                    
-                    try {
-                        this.ws = new WebSocket(finalUrl);
-                    } catch (error) {
-                        // Fallback per servizi cloud
-                        this.ws = new WebSocket(`${protocol}//${window.location.host}`);
-                    }
+                let serverUrl;
+                if (isGlitch) {
+                    // Per Glitch usa semplicemente lo stesso dominio con wss
+                    serverUrl = `wss://${window.location.hostname}`;
                 } else {
-                    document.getElementById('lobbyStatus').textContent = `Connessione a ${serverUrl}...`;
-                    this.ws = new WebSocket(serverUrl);
+                    serverUrl = `${protocol}//${this.settings.serverIP}:${this.settings.serverPort}`;
                 }
                 
-                this.ws.onopen = () => {
-                    document.getElementById('lobbyStatus').textContent = 'Connesso! Aspettando altro giocatore...';
-                };
+                document.getElementById('lobbyStatus').textContent = `Connessione a ${serverUrl}...`;
                 
-                this.ws.onmessage = (event) => {
-                    const data = JSON.parse(event.data);
-                    this.handleServerMessage(data);
-                };
-                
-                this.ws.onclose = () => {
-                    document.getElementById('lobbyStatus').textContent = 'Connessione persa';
+                try {
+                    this.ws = new WebSocket(serverUrl);
+                    
+                    this.ws.onopen = () => {
+                        document.getElementById('lobbyStatus').textContent = 'Connesso! Aspettando altro giocatore...';
+                        console.log('✅ WebSocket connesso!');
+                    };
+                    
+                    this.ws.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+                        console.log('📨 Messaggio ricevuto:', data);
+                        this.handleServerMessage(data);
+                    };
+                    
+                    this.ws.onclose = (event) => {
+                        console.log('❌ WebSocket chiuso:', event.code, event.reason);
+                        document.getElementById('lobbyStatus').textContent = 'Connessione persa - Riprova';
+                        document.getElementById('lobbyStatus').style.borderColor = '#ff4444';
+                    };
+                    
+                    this.ws.onerror = (error) => {
+                        console.error('💥 Errore WebSocket:', error);
+                        document.getElementById('lobbyStatus').textContent = 'Errore di connessione - Server offline?';
+                        document.getElementById('lobbyStatus').style.borderColor = '#ff4444';
+                    };
+                } catch (error) {
+                    console.error('💥 Errore creazione WebSocket:', error);
+                    document.getElementById('lobbyStatus').textContent = 'Impossibile connettersi';
                     document.getElementById('lobbyStatus').style.borderColor = '#ff4444';
-                };
-                
-                this.ws.onerror = () => {
-                    document.getElementById('lobbyStatus').textContent = 'Errore di connessione';
-                    document.getElementById('lobbyStatus').style.borderColor = '#ff4444';
-                };
+                }
             }
 
             handleServerMessage(data) {
