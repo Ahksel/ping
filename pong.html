@@ -571,34 +571,47 @@
             }
 
             connectToServer() {
-                const serverUrl = `ws://${this.settings.serverIP}:${this.settings.serverPort}`;
-                document.getElementById('lobbyStatus').textContent = 'Connessione al server...';
+                // Rileva automaticamente se siamo su HTTPS per usare wss://
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const serverUrl = `${protocol}//${this.settings.serverIP}:${this.settings.serverPort}`;
                 
-                try {
+                // Se siamo su Glitch o servizi simili, usa la porta corrente
+                if (this.settings.serverIP.includes('glitch.me') || 
+                    this.settings.serverIP.includes('onrender.com') ||
+                    window.location.hostname !== 'localhost') {
+                    const port = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
+                    const finalUrl = `${protocol}//${this.settings.serverIP}`;
+                    document.getElementById('lobbyStatus').textContent = `Connessione a ${finalUrl}...`;
+                    
+                    try {
+                        this.ws = new WebSocket(finalUrl);
+                    } catch (error) {
+                        // Fallback per servizi cloud
+                        this.ws = new WebSocket(`${protocol}//${window.location.host}`);
+                    }
+                } else {
+                    document.getElementById('lobbyStatus').textContent = `Connessione a ${serverUrl}...`;
                     this.ws = new WebSocket(serverUrl);
-                    
-                    this.ws.onopen = () => {
-                        document.getElementById('lobbyStatus').textContent = 'Connesso! Aspettando altro giocatore...';
-                    };
-                    
-                    this.ws.onmessage = (event) => {
-                        const data = JSON.parse(event.data);
-                        this.handleServerMessage(data);
-                    };
-                    
-                    this.ws.onclose = () => {
-                        document.getElementById('lobbyStatus').textContent = 'Connessione persa';
-                        document.getElementById('lobbyStatus').style.borderColor = '#ff4444';
-                    };
-                    
-                    this.ws.onerror = () => {
-                        document.getElementById('lobbyStatus').textContent = 'Errore di connessione';
-                        document.getElementById('lobbyStatus').style.borderColor = '#ff4444';
-                    };
-                } catch (error) {
-                    document.getElementById('lobbyStatus').textContent = 'Impossibile connettersi';
-                    document.getElementById('lobbyStatus').style.borderColor = '#ff4444';
                 }
+                
+                this.ws.onopen = () => {
+                    document.getElementById('lobbyStatus').textContent = 'Connesso! Aspettando altro giocatore...';
+                };
+                
+                this.ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    this.handleServerMessage(data);
+                };
+                
+                this.ws.onclose = () => {
+                    document.getElementById('lobbyStatus').textContent = 'Connessione persa';
+                    document.getElementById('lobbyStatus').style.borderColor = '#ff4444';
+                };
+                
+                this.ws.onerror = () => {
+                    document.getElementById('lobbyStatus').textContent = 'Errore di connessione';
+                    document.getElementById('lobbyStatus').style.borderColor = '#ff4444';
+                };
             }
 
             handleServerMessage(data) {
