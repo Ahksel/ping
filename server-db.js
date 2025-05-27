@@ -184,11 +184,12 @@ class PongServerDB {
 
     setupWebSocket() {
         this.wss.on('connection', (ws) => {
-            console.log('🎮 Nuova connessione');
+            console.log('🎮 Nuova connessione WebSocket');
             
             ws.on('message', (data) => {
                 try {
                     const message = JSON.parse(data);
+                    console.log(`📨 Messaggio ricevuto: ${message.type} da ${this.activeSessions.get(ws)?.username || 'anonimo'}`);
                     this.handlePlayerMessage(ws, message);
                 } catch (error) {
                     console.error('Errore nel parsing del messaggio:', error);
