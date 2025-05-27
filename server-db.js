@@ -315,6 +315,7 @@ class PongServerDB {
         const { username, password } = message;
         
         console.log(`📝 Tentativo registrazione: ${username}`);
+        console.log(`💾 Database disponibile: ${this.db ? 'SÌ' : 'NO'}`);
         
         if (!username || !password || username.length < 3 || password.length < 3) {
             console.log('❌ Dati registrazione non validi');
@@ -328,11 +329,10 @@ class PongServerDB {
 
         try {
             if (this.db) {
-                console.log('💾 Usando database MongoDB');
-                // Controlla se utente esiste già
+                console.log('💾 TENTATIVO: Usando database MongoDB REALE');
                 const existingUser = await this.db.collection('users').findOne({ username });
                 if (existingUser) {
-                    console.log(`❌ Username ${username} già esistente`);
+                    console.log(`❌ Username ${username} già esistente nel DB`);
                     ws.send(JSON.stringify({ 
                         type: 'registerResult', 
                         success: false, 
@@ -341,7 +341,6 @@ class PongServerDB {
                     return;
                 }
 
-                // Crea nuovo utente
                 const newUser = {
                     username: username,
                     password: password,
@@ -349,22 +348,21 @@ class PongServerDB {
                     createdAt: new Date()
                 };
                 
-                await this.db.collection('users').insertOne(newUser);
-                console.log(`✅ Utente ${username} registrato nel database`);
+                const result = await this.db.collection('users').insertOne(newUser);
+                console.log(`✅ SUCCESSO: Utente ${username} salvato nel database MongoDB con ID: ${result.insertedId}`);
 
                 ws.send(JSON.stringify({ 
                     type: 'registerResult', 
                     success: true, 
-                    message: 'Registrazione completata! Ora puoi fare il login.' 
+                    message: 'Account registrato nel database MongoDB!' 
                 }));
             } else {
-                console.log('📝 Usando memoria (database non disponibile)');
-                // Fallback: usa memoria
+                console.log('📝 FALLBACK: Usando memoria (database non disponibile)');
                 if (this.users && this.users.has(username)) {
                     ws.send(JSON.stringify({ 
                         type: 'registerResult', 
                         success: false, 
-                        message: 'Username già esistente' 
+                        message: 'Username già esistente (memoria)' 
                     }));
                     return;
                 }
@@ -375,17 +373,17 @@ class PongServerDB {
                     stats: { wins: 0, losses: 0, games: 0 }
                 });
 
-                console.log(`✅ Utente ${username} registrato in memoria`);
+                console.log(`✅ Utente ${username} registrato in MEMORIA TEMPORANEA`);
                 ws.send(JSON.stringify({ 
                     type: 'registerResult', 
                     success: true, 
-                    message: 'Registrazione completata! (Memoria temporanea)' 
+                    message: 'Account registrato (memoria temporanea - si perde al riavvio)' 
                 }));
             }
 
-            console.log(`🎉 Registrazione ${username} completata con successo`);
+            console.log(`🎉 Registrazione ${username} completata`);
         } catch (error) {
-            console.error('💥 Errore registrazione:', error);
+            console.error('💥 ERRORE registrazione:', error.message);
             ws.send(JSON.stringify({ 
                 type: 'registerResult', 
                 success: false, 
