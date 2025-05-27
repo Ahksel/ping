@@ -473,8 +473,8 @@
                 this.settings = {
                     ballSpeed: 5,
                     paddleSize: 100,
-                    serverIP: 'localhost',
-                    serverPort: 3000
+                    serverIP: window.location.hostname || 'localhost', // Auto-rileva l'host
+                    serverPort: window.location.port || 3000
                 };
 
                 // Stato gioco
