@@ -792,23 +792,38 @@
                                 document.getElementById('lobbyStatus').textContent = 'Autenticato! Entrando in lobby...';
                                 // La joinLobby viene chiamata automaticamente dal server
                             } else {
-                                console.log('❌ Non autenticato, effettuo login...');
-                                document.getElementById('lobbyStatus').textContent = 'Effettuando login...';
+                                console.log('❌ Non autenticato, effettuo login automatico...');
+                                document.getElementById('lobbyStatus').textContent = 'Effettuando login automatico...';
                                 
-                                // Se non autenticato, fai login
+                                // Login automatico per multiplayer
                                 if (this.currentUser) {
-                                    console.log('🔑 Tentativo login per:', this.currentUser.username);
+                                    console.log('🔑 Auto-login per multiplayer:', this.currentUser.username);
                                     const savedPassword = localStorage.getItem('pong_temp_password');
-                                    console.log('🔐 Password salvata trovata:', !!savedPassword);
+                                    console.log('🔐 Password salvata:', !!savedPassword);
                                     
+                                    // Usa password salvata o fallback per account demo
+                                    let password = savedPassword;
+                                    if (!password) {
+                                        // Fallback per account demo
+                                        if (this.currentUser.username === 'guest1' || this.currentUser.username === 'guest2') {
+                                            password = 'password';
+                                        } else if (this.currentUser.username === 'admin') {
+                                            password = 'admin123';
+                                        } else {
+                                            password = 'password'; // Fallback generico
+                                        }
+                                    }
+                                    
+                                    console.log('🔑 Tentativo login con fallback per:', this.currentUser.username);
                                     this.ws.send(JSON.stringify({
                                         type: 'login',
                                         username: this.currentUser.username,
-                                        password: savedPassword || 'password' // Fallback per account demo
+                                        password: password
                                     }));
                                 } else {
                                     console.error('❌ Nessun currentUser trovato');
-                                    document.getElementById('lobbyStatus').textContent = 'Errore: utente non trovato';
+                                    document.getElementById('lobbyStatus').textContent = 'Errore: devi rifare il login';
+                                    document.getElementById('lobbyStatus').style.borderColor = '#ff4444';
                                 }
                             }
                         } else if (data.type === 'loginResult') {
