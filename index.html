@@ -774,62 +774,46 @@
                     
                     this.ws.onopen = () => {
                         console.log('✅ WebSocket connesso!');
-                        document.getElementById('lobbyStatus').textContent = 'Connesso! Verificando autenticazione...';
+                        document.getElementById('lobbyStatus').textContent = 'Connesso! Effettuando login...';
                         
-                        // Prima controlla se siamo già autenticati
-                        console.log('🔍 Controllo autenticazione esistente...');
-                        this.ws.send(JSON.stringify({ type: 'checkAuth' }));
+                        // Login diretto per multiplayer (semplificato)
+                        if (this.currentUser) {
+                            console.log('🔑 Login diretto per multiplayer:', this.currentUser.username);
+                            const savedPassword = localStorage.getItem('pong_temp_password');
+                            
+                            // Usa password salvata o fallback per account demo
+                            let password = savedPassword;
+                            if (!password) {
+                                if (this.currentUser.username === 'guest1' || this.currentUser.username === 'guest2') {
+                                    password = 'password';
+                                } else if (this.currentUser.username === 'admin') {
+                                    password = 'admin123';
+                                } else {
+                                    password = 'password';
+                                }
+                            }
+                            
+                            console.log('🔑 Tentativo login per:', this.currentUser.username);
+                            this.ws.send(JSON.stringify({
+                                type: 'login',
+                                username: this.currentUser.username,
+                                password: password
+                            }));
+                        } else {
+                            console.error('❌ Nessun currentUser trovato');
+                            document.getElementById('lobbyStatus').textContent = 'Errore: devi rifare il login';
+                            document.getElementById('lobbyStatus').style.borderColor = '#ff4444';
+                        }
                     };
                     
                     this.ws.onmessage = (event) => {
                         const data = JSON.parse(event.data);
                         console.log('📨 Messaggio dal server:', data.type, data);
                         
-                        if (data.type === 'authResult') {
-                            console.log('🔍 Risultato autenticazione:', data.success);
+                        if (data.type === 'loginResult') {
+                            console.log('🔑 Risultato login multiplayer:', data.success);
                             if (data.success) {
-                                console.log('✅ Già autenticato come:', data.username);
-                                document.getElementById('lobbyStatus').textContent = 'Autenticato! Entrando in lobby...';
-                                // La joinLobby viene chiamata automaticamente dal server
-                            } else {
-                                console.log('❌ Non autenticato, effettuo login automatico...');
-                                document.getElementById('lobbyStatus').textContent = 'Effettuando login automatico...';
-                                
-                                // Login automatico per multiplayer
-                                if (this.currentUser) {
-                                    console.log('🔑 Auto-login per multiplayer:', this.currentUser.username);
-                                    const savedPassword = localStorage.getItem('pong_temp_password');
-                                    console.log('🔐 Password salvata:', !!savedPassword);
-                                    
-                                    // Usa password salvata o fallback per account demo
-                                    let password = savedPassword;
-                                    if (!password) {
-                                        // Fallback per account demo
-                                        if (this.currentUser.username === 'guest1' || this.currentUser.username === 'guest2') {
-                                            password = 'password';
-                                        } else if (this.currentUser.username === 'admin') {
-                                            password = 'admin123';
-                                        } else {
-                                            password = 'password'; // Fallback generico
-                                        }
-                                    }
-                                    
-                                    console.log('🔑 Tentativo login con fallback per:', this.currentUser.username);
-                                    this.ws.send(JSON.stringify({
-                                        type: 'login',
-                                        username: this.currentUser.username,
-                                        password: password
-                                    }));
-                                } else {
-                                    console.error('❌ Nessun currentUser trovato');
-                                    document.getElementById('lobbyStatus').textContent = 'Errore: devi rifare il login';
-                                    document.getElementById('lobbyStatus').style.borderColor = '#ff4444';
-                                }
-                            }
-                        } else if (data.type === 'loginResult') {
-                            console.log('🔑 Risultato login:', data.success);
-                            if (data.success) {
-                                console.log('✅ Login riuscito, entro in lobby...');
+                                console.log('✅ Login multiplayer riuscito, entro in lobby...');
                                 document.getElementById('lobbyStatus').textContent = 'Login effettuato! Entrando in lobby...';
                                 
                                 setTimeout(() => {
@@ -837,7 +821,7 @@
                                     this.ws.send(JSON.stringify({ type: 'joinLobby' }));
                                 }, 500);
                             } else {
-                                console.error('❌ Login fallito:', data.message);
+                                console.error('❌ Login multiplayer fallito:', data.message);
                                 document.getElementById('lobbyStatus').textContent = 'Errore login: ' + data.message;
                                 document.getElementById('lobbyStatus').style.borderColor = '#ff4444';
                             }
