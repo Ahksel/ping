@@ -9,7 +9,10 @@ class PongServerDB {
         this.server = http.createServer(this.handleRequest.bind(this));
         this.wss = new WebSocket.Server({ server: this.server });
         
-        // MongoDB connection
+        // MongoDB connection - DEBUG
+        console.log('🔍 DEBUG - process.env.MONGODB_URL:', process.env.MONGODB_URL ? 'TROVATO' : 'NON TROVATO');
+        console.log('🔍 DEBUG - Valore:', process.env.MONGODB_URL);
+        
         this.mongoUrl = process.env.MONGODB_URL || 'mongodb://localhost:27017';
         this.dbName = 'pongultimate';
         this.client = null;
