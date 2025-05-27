@@ -8,7 +8,11 @@ class PongServer {
         this.server = http.createServer(this.handleRequest.bind(this));
         this.wss = new WebSocket.Server({ server: this.server });
         
-        this.players = new Map(); // ws -> {id, ready}
+        // Sistema utenti (in memoria - per Glitch)
+        this.users = new Map(); // username -> {password, stats: {wins, losses, games}}
+        this.activeSessions = new Map(); // ws -> {username, playerId, ready}
+        
+        this.players = new Map(); // ws -> {id, ready, username}
         this.gameState = this.initGameState();
         this.gameRunning = false;
         this.gameLoopId = null;
@@ -17,14 +21,36 @@ class PongServer {
             player2: null,
             player1Ready: false,
             player2Ready: false,
+            player1Name: '',
+            player2Name: '',
             playersCount: 0
         };
         
+        // Crea alcuni utenti demo
+        this.createDemoUsers();
+        
         this.setupWebSocket();
-        console.log('🏓 Server Pong Ultimate avviato!');
+        console.log('🏓 Server Pong Ultimate con Sistema Utenti avviato!');
+        console.log('👤 Utenti demo: guest1/password, guest2/password');
         console.log('📡 WebSocket server pronto sulla porta 3000');
         console.log('🌐 Apri http://localhost:3000 nel browser per giocare!');
         console.log('🌍 Per giocare da altre reti, configura il port forwarding sulla porta 3000');
+    }
+
+    createDemoUsers() {
+        // Crea utenti demo per testing
+        this.users.set('guest1', {
+            password: 'password',
+            stats: { wins: 5, losses: 3, games: 8 }
+        });
+        this.users.set('guest2', {
+            password: 'password',  
+            stats: { wins: 2, losses: 6, games: 8 }
+        });
+        this.users.set('admin', {
+            password: 'admin123',
+            stats: { wins: 10, losses: 2, games: 12 }
+        });
     }
     
     initGameState() {
@@ -107,31 +133,7 @@ class PongServer {
     
     setupWebSocket() {
         this.wss.on('connection', (ws) => {
-            console.log('🎮 Nuovo giocatore connesso');
-            
-            // Assegna ID giocatore
-            let playerId = null;
-            if (!this.lobbyState.player1) {
-                playerId = 1;
-                this.lobbyState.player1 = ws;
-            } else if (!this.lobbyState.player2) {
-                playerId = 2;
-                this.lobbyState.player2 = ws;
-            } else {
-                ws.send(JSON.stringify({ type: 'error', message: 'Lobby piena!' }));
-                ws.close();
-                return;
-            }
-            
-            this.players.set(ws, { id: playerId, ready: false });
-            this.lobbyState.playersCount++;
-            
-            ws.send(JSON.stringify({ type: 'playerId', id: playerId }));
-            
-            console.log(`👤 Giocatore ${playerId} connesso (${this.lobbyState.playersCount}/2)`);
-            
-            // Invia stato lobby aggiornato
-            this.broadcastLobbyState();
+            console.log('🎮 Nuova connessione');
             
             // Gestisci messaggi
             ws.on('message', (data) => {
@@ -145,51 +147,224 @@ class PongServer {
             
             // Gestisci disconnessione
             ws.on('close', () => {
-                const playerData = this.players.get(ws);
-                if (playerData) {
-                    console.log(`👋 Giocatore ${playerData.id} disconnesso`);
-                    
-                    // Reset lobby state
-                    if (playerData.id === 1) {
-                        this.lobbyState.player1 = null;
-                        this.lobbyState.player1Ready = false;
-                    } else {
-                        this.lobbyState.player2 = null;
-                        this.lobbyState.player2Ready = false;
-                    }
-                    
-                    this.lobbyState.playersCount--;
-                    this.players.delete(ws);
-                    
-                    if (this.gameRunning) {
-                        this.stopGame();
-                    }
-                    
-                    this.broadcastLobbyState();
-                    this.broadcast({ type: 'playerLeft' });
-                }
+                this.handleDisconnection(ws);
             });
         });
     }
 
-    handlePlayerMessage(ws, message) {
+    handleDisconnection(ws) {
+        const session = this.activeSessions.get(ws);
         const playerData = this.players.get(ws);
-        if (!playerData) return;
+        
+        if (session) {
+            console.log(`👋 ${session.username} disconnesso`);
+            this.activeSessions.delete(ws);
+        }
+        
+        if (playerData) {
+            // Reset lobby state
+            if (playerData.id === 1) {
+                this.lobbyState.player1 = null;
+                this.lobbyState.player1Ready = false;
+                this.lobbyState.player1Name = '';
+            } else if (playerData.id === 2) {
+                this.lobbyState.player2 = null;
+                this.lobbyState.player2Ready = false;
+                this.lobbyState.player2Name = '';
+            }
+            
+            this.lobbyState.playersCount--;
+            this.players.delete(ws);
+            
+            if (this.gameRunning) {
+                this.stopGame();
+            }
+            
+            this.broadcastLobbyState();
+            this.broadcast({ type: 'playerLeft' });
+        }
+    }
+
+    // Metodo per entrare in lobby (dopo login)
+    joinLobby(ws) {
+        const session = this.activeSessions.get(ws);
+        if (!session) return;
+
+        // Assegna ID giocatore
+        let playerId = null;
+        if (!this.lobbyState.player1) {
+            playerId = 1;
+            this.lobbyState.player1 = ws;
+            this.lobbyState.player1Name = session.username;
+        } else if (!this.lobbyState.player2) {
+            playerId = 2;
+            this.lobbyState.player2 = ws;
+            this.lobbyState.player2Name = session.username;
+        } else {
+            ws.send(JSON.stringify({ type: 'error', message: 'Lobby piena!' }));
+            return;
+        }
+        
+        this.players.set(ws, { id: playerId, ready: false, username: session.username });
+        session.playerId = playerId;
+        this.lobbyState.playersCount++;
+        
+        ws.send(JSON.stringify({ type: 'playerId', id: playerId }));
+        
+        console.log(`👤 ${session.username} è entrato in lobby come giocatore ${playerId}`);
+        
+        this.broadcastLobbyState();
+    }
+
+    handlePlayerMessage(ws, message) {
+        const session = this.activeSessions.get(ws);
 
         switch (message.type) {
+            case 'login':
+                this.handleLogin(ws, message);
+                break;
+            case 'register':
+                this.handleRegister(ws, message);
+                break;
+            case 'joinLobby':
+                if (session) {
+                    this.joinLobby(ws);
+                }
+                break;
             case 'playerReady':
-                this.handlePlayerReady(ws, message.ready);
+                const playerData = this.players.get(ws);
+                if (playerData) {
+                    this.handlePlayerReady(ws, message.ready);
+                }
                 break;
             case 'input':
-                if (this.gameRunning) {
+                if (this.gameRunning && this.players.has(ws)) {
                     this.handlePlayerInput(ws, message);
                 }
                 break;
             case 'inputStop':
-                if (this.gameRunning) {
+                if (this.gameRunning && this.players.has(ws)) {
                     this.handleInputStop(ws);
                 }
                 break;
+            case 'mouseInput':
+                if (this.gameRunning && this.players.has(ws)) {
+                    this.handleMouseInput(ws, message);
+                }
+                break;
+            case 'getStats':
+                this.handleGetStats(ws);
+                break;
+        }
+    }
+
+    handleLogin(ws, message) {
+        const { username, password } = message;
+        
+        if (!this.users.has(username)) {
+            ws.send(JSON.stringify({ 
+                type: 'loginResult', 
+                success: false, 
+                message: 'Utente non trovato' 
+            }));
+            return;
+        }
+
+        const user = this.users.get(username);
+        if (user.password !== password) {
+            ws.send(JSON.stringify({ 
+                type: 'loginResult', 
+                success: false, 
+                message: 'Password errata' 
+            }));
+            return;
+        }
+
+        // Controlla se l'utente è già connesso
+        for (let [otherWs, session] of this.activeSessions) {
+            if (session.username === username && otherWs !== ws) {
+                ws.send(JSON.stringify({ 
+                    type: 'loginResult', 
+                    success: false, 
+                    message: 'Utente già connesso' 
+                }));
+                return;
+            }
+        }
+
+        // Login riuscito
+        this.activeSessions.set(ws, { username, playerId: null, ready: false });
+        
+        ws.send(JSON.stringify({ 
+            type: 'loginResult', 
+            success: true, 
+            username: username,
+            stats: user.stats
+        }));
+
+        console.log(`👤 ${username} ha effettuato il login`);
+    }
+
+    handleRegister(ws, message) {
+        const { username, password } = message;
+        
+        if (this.users.has(username)) {
+            ws.send(JSON.stringify({ 
+                type: 'registerResult', 
+                success: false, 
+                message: 'Username già esistente' 
+            }));
+            return;
+        }
+
+        if (!username || !password || username.length < 3 || password.length < 3) {
+            ws.send(JSON.stringify({ 
+                type: 'registerResult', 
+                success: false, 
+                message: 'Username e password devono avere almeno 3 caratteri' 
+            }));
+            return;
+        }
+
+        // Registrazione riuscita
+        this.users.set(username, {
+            password: password,
+            stats: { wins: 0, losses: 0, games: 0 }
+        });
+
+        ws.send(JSON.stringify({ 
+            type: 'registerResult', 
+            success: true, 
+            message: 'Registrazione completata!' 
+        }));
+
+        console.log(`✨ Nuovo utente registrato: ${username}`);
+    }
+
+    handleGetStats(ws) {
+        const session = this.activeSessions.get(ws);
+        if (session) {
+            const user = this.users.get(session.username);
+            ws.send(JSON.stringify({ 
+                type: 'userStats', 
+                username: session.username,
+                stats: user.stats 
+            }));
+        }
+    }
+
+    handleMouseInput(ws, message) {
+        const playerData = this.players.get(ws);
+        if (!playerData || !this.gameRunning) return;
+        
+        const paddleY = Math.max(0, Math.min(300, message.paddleY));
+        
+        if (playerData.id === 1) {
+            this.gameState.paddle1.y = paddleY;
+            this.gameState.paddle1.dy = 0;
+        } else if (playerData.id === 2) {
+            this.gameState.paddle2.y = paddleY;
+            this.gameState.paddle2.dy = 0;
         }
     }
 
@@ -222,10 +397,86 @@ class PongServer {
             player2: !!this.lobbyState.player2,
             player1Ready: this.lobbyState.player1Ready,
             player2Ready: this.lobbyState.player2Ready,
+            player1Name: this.lobbyState.player1Name,
+            player2Name: this.lobbyState.player2Name,
             playersCount: this.lobbyState.playersCount
         };
         
         this.broadcast(lobbyUpdate);
+    }
+
+    resetBall() {
+        this.gameState.ball.x = 400;
+        this.gameState.ball.y = 200;
+        this.gameState.ball.dx = Math.random() > 0.5 ? 5 : -5;
+        this.gameState.ball.dy = (Math.random() - 0.5) * 6;
+        
+        console.log(`⚽ Goal! Punteggio: ${this.gameState.score1} - ${this.gameState.score2}`);
+        
+        // Controlla se qualcuno ha vinto (prima a 5 punti)
+        if (this.gameState.score1 >= 5 || this.gameState.score2 >= 5) {
+            this.endGame();
+        }
+    }
+
+    endGame() {
+        const winner = this.gameState.score1 > this.gameState.score2 ? 1 : 2;
+        const finalScore = {
+            player1: this.gameState.score1,
+            player2: this.gameState.score2
+        };
+
+        // Aggiorna statistiche utenti
+        this.updateUserStats(winner);
+
+        // Invia risultato finale
+        this.broadcast({
+            type: 'gameEnd',
+            winner: winner,
+            finalScore: finalScore
+        });
+
+        console.log(`🏆 Partita terminata! Vince il giocatore ${winner} (${finalScore.player1}-${finalScore.player2})`);
+
+        // Reset per nuova partita
+        setTimeout(() => {
+            this.stopGame();
+            this.resetGameState();
+            this.resetLobbyReadyState();
+            this.broadcastLobbyState();
+        }, 3000);
+    }
+
+    updateUserStats(winner) {
+        // Aggiorna statistiche nel database in memoria
+        this.players.forEach((playerData, ws) => {
+            const session = this.activeSessions.get(ws);
+            if (session && session.username) {
+                const user = this.users.get(session.username);
+                if (user) {
+                    user.stats.games++;
+                    if (playerData.id === winner) {
+                        user.stats.wins++;
+                    } else {
+                        user.stats.losses++;
+                    }
+                    console.log(`📊 Stats aggiornate per ${session.username}: ${user.stats.wins}W-${user.stats.losses}L`);
+                }
+            }
+        });
+    }
+
+    resetGameState() {
+        this.gameState = this.initGameState();
+    }
+
+    resetLobbyReadyState() {
+        this.lobbyState.player1Ready = false;
+        this.lobbyState.player2Ready = false;
+        
+        this.players.forEach((playerData) => {
+            playerData.ready = false;
+        });
     }
     
     handlePlayerInput(ws, message) {
