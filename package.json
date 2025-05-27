@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "ws": "^8.14.2",
-    "mongodb": "^6.2.0"
+    "mongodb": "^4.17.2"
   },
   "engines": {
     "node": ">=16.0.0"
