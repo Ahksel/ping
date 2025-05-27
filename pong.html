@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pong Ultimate</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+            color: white;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            position: relative;
+        }
+
+        .screen {
+            display: none;
+            width: 100%;
+            max-width: 900px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        /* Menu Principale */
+        .main-menu {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .logo {
+            font-size: 4rem;
+            font-weight: bold;
+            background: linear-gradient(45deg, #00ff88, #00aaff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(0, 255, 136, 0.5);
+            margin-bottom: 20px;
+        }
+
+        .menu-button {
+            padding: 15px 40px;
+            background: rgba(0, 255, 136, 0.1);
+            border: 2px solid #00ff88;
+            border-radius: 25px;
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: inherit;
+            min-width: 250px;
+        }
+
+        .menu-button:hover {
+            background: rgba(0, 255, 136, 0.3);
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+            transform: translateY(-2px);
+        }
+
+        /* Impostazioni */
+        .settings-panel {
+            display: grid;
+            gap: 20px;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .setting-group {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            border-radius: 15px;
+            border: 1px solid #00ff88;
+        }
+
+        .setting-label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .setting-input {
+            width: 100%;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #00ff88;
+            border-radius: 8px;
+            color: white;
+            font-family: inherit;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .slider {
+            flex: 1;
+            height: 5px;
+            border-radius: 5px;
+            background: rgba(0, 255, 136, 0.3);
+            outline: none;
+            cursor: pointer;
+        }
+
+        .slider::-webkit-slider-thumb {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #00ff88;
+            cursor: pointer;
+        }
+
+        /* Lobby */
+        .lobby-panel {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .player-status {
+            display: flex;
+            gap: 50px;
+            margin: 20px 0;
+        }
+
+        .player-card {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 25px;
+            border-radius: 15px;
+            border: 2px solid #00ff88;
+            min-width: 200px;
+        }
+
+        .player-card.ready {
+            border-color: #00aaff;
+            background: rgba(0, 170, 255, 0.1);
+        }
+
+        .ready-button {
+            padding: 12px 30px;
+            background: rgba(0, 255, 136, 0.2);
+            border: 2px solid #00ff88;
+            border-radius: 20px;
+            color: white;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .ready-button.ready {
+            background: rgba(0, 170, 255, 0.3);
+            border-color: #00aaff;
+        }
+
+        .ready-button:hover {
+            transform: scale(1.05);
+        }
+
+        /* Gioco */
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .game-info {
+            display: flex;
+            gap: 40px;
+            align-items: center;
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        .score {
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 0 0 10px #00ff88;
+        }
+
+        .status {
+            padding: 10px 20px;
+            border-radius: 25px;
+            background: rgba(0, 255, 136, 0.1);
+            border: 2px solid #00ff88;
+            font-size: 16px;
+            text-align: center;
+            min-width: 200px;
+        }
+
+        canvas {
+            border: 3px solid #00ff88;
+            border-radius: 10px;
+            box-shadow: 
+                0 0 20px rgba(0, 255, 136, 0.3),
+                inset 0 0 20px rgba(0, 255, 136, 0.1);
+            background: rgba(0, 0, 0, 0.8);
+        }
+
+        .controls {
+            display: flex;
+            gap: 30px;
+            margin-top: 15px;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .control-group {
+            text-align: center;
+        }
+
+        .keys {
+            display: flex;
+            gap: 10px;
+            margin-top: 5px;
+        }
+
+        .key {
+            padding: 5px 10px;
+            background: rgba(0, 255, 136, 0.2);
+            border: 1px solid #00ff88;
+            border-radius: 5px;
+            font-size: 12px;
+        }
+
+        .back-button {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            padding: 10px 20px;
+            background: rgba(255, 68, 68, 0.2);
+            border: 2px solid #ff4444;
+            border-radius: 15px;
+            color: white;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .back-button:hover {
+            background: rgba(255, 68, 68, 0.4);
+        }
+
+        /* Mobile */
+        .mobile-controls {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            gap: 40px;
+        }
+
+        .mobile-paddle {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .mobile-btn {
+            width: 60px;
+            height: 60px;
+            background: rgba(0, 255, 136, 0.2);
+            border: 2px solid #00ff88;
+            border-radius: 50%;
+            color: white;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            touch-action: manipulation;
+        }
+
+        .mobile-btn:active {
+            background: rgba(0, 255, 136, 0.5);
+        }
+
+        @media (max-width: 768px) {
+            .mobile-controls {
+                display: flex;
+            }
+            .controls {
+                display: none;
+            }
+            .logo {
+                font-size: 2.5rem;
+            }
+        }
+
+        .waiting-animation {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .countdown {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #00ff88;
+            text-shadow: 0 0 20px #00ff88;
+            animation: countdownPulse 1s ease-in-out;
+        }
+
+        @keyframes countdownPulse {
+            0% { transform: scale(0.5); opacity: 0; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- MENU PRINCIPALE -->
+        <div class="screen active" id="mainMenu">
+            <div class="main-menu">
+                <div class="logo">🏓 PONG ULTIMATE</div>
+                <button class="menu-button" onclick="showScreen('modeSelect')">🎮 GIOCA</button>
+                <button class="menu-button" onclick="showScreen('settings')">⚙️ IMPOSTAZIONI</button>
+                <button class="menu-button" onclick="showAbout()">ℹ️ INFO</button>
+            </div>
+        </div>
+
+        <!-- SELEZIONE MODALITÀ -->
+        <div class="screen" id="modeSelect">
+            <button class="back-button" onclick="showScreen('mainMenu')">← INDIETRO</button>
+            <div class="main-menu">
+                <h2 style="margin-bottom: 30px;">Scegli modalità:</h2>
+                <button class="menu-button" onclick="startSinglePlayer()">🤖 SINGLE PLAYER</button>
+                <button class="menu-button" onclick="startMultiplayer()">🌐 MULTIPLAYER</button>
+            </div>
+        </div>
+
+        <!-- IMPOSTAZIONI -->
+        <div class="screen" id="settings">
+            <button class="back-button" onclick="showScreen('mainMenu')">← INDIETRO</button>
+            <h2 style="margin-bottom: 30px;">⚙️ Impostazioni</h2>
+            <div class="settings-panel">
+                <div class="setting-group">
+                    <label class="setting-label">Velocità Palla:</label>
+                    <div class="slider-container">
+                        <span>Lenta</span>
+                        <input type="range" class="slider" id="ballSpeed" min="3" max="8" value="5">
+                        <span>Veloce</span>
+                    </div>
+                </div>
+                <div class="setting-group">
+                    <label class="setting-label">Dimensione Racchette:</label>
+                    <div class="slider-container">
+                        <span>Piccole</span>
+                        <input type="range" class="slider" id="paddleSize" min="70" max="130" value="100">
+                        <span>Grandi</span>
+                    </div>
+                </div>
+                <div class="setting-group">
+                    <label class="setting-label">Server IP (per multiplayer):</label>
+                    <input type="text" class="setting-input" id="serverIP" placeholder="192.168.1.100" value="localhost">
+                </div>
+                <div class="setting-group">
+                    <label class="setting-label">Porta Server:</label>
+                    <input type="number" class="setting-input" id="serverPort" value="3000">
+                </div>
+            </div>
+        </div>
+
+        <!-- LOBBY MULTIPLAYER -->
+        <div class="screen" id="lobby">
+            <button class="back-button" onclick="disconnect()">← DISCONNETTI</button>
+            <div class="lobby-panel">
+                <h2>🌐 Lobby Multiplayer</h2>
+                <div class="status" id="lobbyStatus">Connessione...</div>
+                
+                <div class="player-status">
+                    <div class="player-card" id="player1Card">
+                        <h3>Giocatore 1</h3>
+                        <p id="player1Status">In attesa...</p>
+                        <button class="ready-button" id="readyButton1" onclick="toggleReady()" style="display: none;">PRONTO</button>
+                    </div>
+                    <div class="player-card" id="player2Card">
+                        <h3>Giocatore 2</h3>
+                        <p id="player2Status">In attesa...</p>
+                    </div>
+                </div>
+
+                <div id="countdown" class="countdown" style="display: none;"></div>
+            </div>
+        </div>
+
+        <!-- GIOCO -->
+        <div class="screen" id="gameScreen">
+            <div class="game-container">
+                <div class="game-info">
+                    <div class="score">Giocatore 1: <span id="score1">0</span></div>
+                    <div class="status" id="gameStatus">Gioco in corso</div>
+                    <div class="score">Giocatore 2: <span id="score2">0</span></div>
+                </div>
+                
+                <canvas id="gameCanvas" width="800" height="400"></canvas>
+                
+                <div class="controls">
+                    <div class="control-group">
+                        <div>Giocatore 1 (Sinistra)</div>
+                        <div class="keys">
+                            <div class="key">Q</div>
+                            <div class="key">A</div>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <div>Giocatore 2 (Destra)</div>
+                        <div class="keys">
+                            <div class="key">P</div>
+                            <div class="key">L</div>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="back-button" onclick="endGame()">← MENU</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Controlli Mobile -->
+    <div class="mobile-controls">
+        <div class="mobile-paddle">
+            <div class="mobile-btn" id="p1Up">↑</div>
+            <div class="mobile-btn" id="p1Down">↓</div>
+            <div style="font-size: 12px;">P1</div>
+        </div>
+        <div class="mobile-paddle">
+            <div class="mobile-btn" id="p2Up">↑</div>
+            <div class="mobile-btn" id="p2Down">↓</div>
+            <div style="font-size: 12px;">P2</div>
+        </div>
+    </div>
+
+    <script>
+        class PongUltimate {
+            constructor() {
+                this.currentScreen = 'mainMenu';
+                this.gameMode = null; // 'single' or 'multi'
+                this.ws = null;
+                this.playerId = null;
+                this.playerReady = false;
+                this.opponentReady = false;
+                
+                // Impostazioni
+                this.settings = {
+                    ballSpeed: 5,
+                    paddleSize: 100,
+                    serverIP: 'localhost',
+                    serverPort: 3000
+                };
+
+                // Stato gioco
+                this.gameState = {
+                    ball: { x: 400, y: 200, dx: 5, dy: 3, radius: 8 },
+                    paddle1: { x: 20, y: 150, width: 15, height: 100, dy: 0 },
+                    paddle2: { x: 765, y: 150, width: 15, height: 100, dy: 0 },
+                    score1: 0,
+                    score2: 0,
+                    gameRunning: false
+                };
+
+                this.keys = {};
+                this.aiSpeed = 0.6; // Velocità AI per single player
+
+                this.initCanvas();
+                this.initControls();
+                this.loadSettings();
+            }
+
+            // GESTIONE SCHERMATE
+            showScreen(screenId) {
+                document.querySelectorAll('.screen').forEach(screen => {
+                    screen.classList.remove('active');
+                });
+                document.getElementById(screenId).classList.add('active');
+                this.currentScreen = screenId;
+            }
+
+            showAbout() {
+                alert('🏓 Pong Ultimate v2.0\n\nCreato per giocare con amici online!\n\n• Single Player vs AI\n• Multiplayer online\n• Controlli touch mobile\n• Sistema lobby\n\nDivertiti! 🎮');
+            }
+
+            // IMPOSTAZIONI
+            loadSettings() {
+                document.getElementById('ballSpeed').value = this.settings.ballSpeed;
+                document.getElementById('paddleSize').value = this.settings.paddleSize;
+                document.getElementById('serverIP').value = this.settings.serverIP;
+                document.getElementById('serverPort').value = this.settings.serverPort;
+
+                // Event listeners per impostazioni
+                document.getElementById('ballSpeed').addEventListener('input', (e) => {
+                    this.settings.ballSpeed = parseInt(e.target.value);
+                });
+                document.getElementById('paddleSize').addEventListener('input', (e) => {
+                    this.settings.paddleSize = parseInt(e.target.value);
+                });
+                document.getElementById('serverIP').addEventListener('input', (e) => {
+                    this.settings.serverIP = e.target.value;
+                });
+                document.getElementById('serverPort').addEventListener('input', (e) => {
+                    this.settings.serverPort = parseInt(e.target.value);
+                });
+            }
+
+            // MODALITÀ SINGLE PLAYER
+            startSinglePlayer() {
+                this.gameMode = 'single';
+                this.resetGame();
+                this.showScreen('gameScreen');
+                this.gameState.gameRunning = true;
+                this.singlePlayerLoop();
+            }
+
+            singlePlayerLoop() {
+                if (this.gameMode === 'single' && this.gameState.gameRunning) {
+                    this.updateSinglePlayer();
+                    this.render();
+                    requestAnimationFrame(() => this.singlePlayerLoop());
+                }
+            }
+
+            updateSinglePlayer() {
+                // AI per paddle destro
+                const ballY = this.gameState.ball.y;
+                const paddleCenter = this.gameState.paddle2.y + this.gameState.paddle2.height / 2;
+                
+                if (ballY < paddleCenter - 10) {
+                    this.gameState.paddle2.dy = -this.aiSpeed * this.settings.ballSpeed;
+                } else if (ballY > paddleCenter + 10) {
+                    this.gameState.paddle2.dy = this.aiSpeed * this.settings.ballSpeed;
+                } else {
+                    this.gameState.paddle2.dy = 0;
+                }
+
+                this.updateGamePhysics();
+            }
+
+            // MODALITÀ MULTIPLAYER
+            startMultiplayer() {
+                this.gameMode = 'multi';
+                this.showScreen('lobby');
+                this.connectToServer();
+            }
+
+            connectToServer() {
+                const serverUrl = `ws://${this.settings.serverIP}:${this.settings.serverPort}`;
+                document.getElementById('lobbyStatus').textContent = 'Connessione al server...';
+                
+                try {
+                    this.ws = new WebSocket(serverUrl);
+                    
+                    this.ws.onopen = () => {
+                        document.getElementById('lobbyStatus').textContent = 'Connesso! Aspettando altro giocatore...';
+                    };
+                    
+                    this.ws.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+                        this.handleServerMessage(data);
+                    };
+                    
+                    this.ws.onclose = () => {
+                        document.getElementById('lobbyStatus').textContent = 'Connessione persa';
+                        document.getElementById('lobbyStatus').style.borderColor = '#ff4444';
+                    };
+                    
+                    this.ws.onerror = () => {
+                        document.getElementById('lobbyStatus').textContent = 'Errore di connessione';
+                        document.getElementById('lobbyStatus').style.borderColor = '#ff4444';
+                    };
+                } catch (error) {
+                    document.getElementById('lobbyStatus').textContent = 'Impossibile connettersi';
+                    document.getElementById('lobbyStatus').style.borderColor = '#ff4444';
+                }
+            }
+
+            handleServerMessage(data) {
+                switch (data.type) {
+                    case 'playerId':
+                        this.playerId = data.id;
+                        this.updateLobbyUI();
+                        break;
+                    case 'lobbyUpdate':
+                        this.updateLobbyState(data);
+                        break;
+                    case 'gameStart':
+                        this.startCountdown();
+                        break;
+                    case 'gameState':
+                        this.gameState = data.state;
+                        this.updateGameUI();
+                        break;
+                    case 'playerLeft':
+                        this.handlePlayerLeft();
+                        break;
+                }
+            }
+
+            updateLobbyState(data) {
+                document.getElementById('player1Status').textContent = data.player1 ? (data.player1Ready ? 'PRONTO!' : 'Connesso') : 'In attesa...';
+                document.getElementById('player2Status').textContent = data.player2 ? (data.player2Ready ? 'PRONTO!' : 'Connesso') : 'In attesa...';
+                
+                if (data.player1) document.getElementById('player1Card').classList.toggle('ready', data.player1Ready);
+                if (data.player2) document.getElementById('player2Card').classList.toggle('ready', data.player2Ready);
+
+                if (data.playersCount === 2) {
+                    document.getElementById('lobbyStatus').textContent = 'Entrambi i giocatori connessi!';
+                    document.getElementById('readyButton1').style.display = 'block';
+                }
+            }
+
+            updateLobbyUI() {
+                if (this.playerId) {
+                    document.getElementById('readyButton1').style.display = 'block';
+                }
+            }
+
+            toggleReady() {
+                this.playerReady = !this.playerReady;
+                const button = document.getElementById('readyButton1');
+                button.textContent = this.playerReady ? 'ANNULLA' : 'PRONTO';
+                button.classList.toggle('ready', this.playerReady);
+                
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({ 
+                        type: 'playerReady', 
+                        ready: this.playerReady 
+                    }));
+                }
+            }
+
+            startCountdown() {
+                const countdownEl = document.getElementById('countdown');
+                countdownEl.style.display = 'block';
+                let count = 3;
+                
+                const countInterval = setInterval(() => {
+                    countdownEl.textContent = count;
+                    count--;
+                    
+                    if (count < 0) {
+                        clearInterval(countInterval);
+                        countdownEl.textContent = 'VIA!';
+                        setTimeout(() => {
+                            this.showScreen('gameScreen');
+                            this.gameState.gameRunning = true;
+                            this.multiPlayerLoop();
+                        }, 500);
+                    }
+                }, 1000);
+            }
+
+            multiPlayerLoop() {
+                if (this.gameMode === 'multi' && this.gameState.gameRunning) {
+                    this.render();
+                    requestAnimationFrame(() => this.multiPlayerLoop());
+                }
+            }
+
+            disconnect() {
+                if (this.ws) {
+                    this.ws.close();
+                    this.ws = null;
+                }
+                this.showScreen('mainMenu');
+            }
+
+            // FISICA DEL GIOCO
+            updateGamePhysics() {
+                // Aggiorna paddle
+                this.gameState.paddle1.y += this.gameState.paddle1.dy;
+                this.gameState.paddle2.y += this.gameState.paddle2.dy;
+                
+                // Limiti paddle
+                this.gameState.paddle1.y = Math.max(0, Math.min(300, this.gameState.paddle1.y));
+                this.gameState.paddle2.y = Math.max(0, Math.min(300, this.gameState.paddle2.y));
+                
+                // Aggiorna palla
+                this.gameState.ball.x += this.gameState.ball.dx;
+                this.gameState.ball.y += this.gameState.ball.dy;
+                
+                // Rimbalzo bordi verticali
+                if (this.gameState.ball.y <= this.gameState.ball.radius || 
+                    this.gameState.ball.y >= 400 - this.gameState.ball.radius) {
+                    this.gameState.ball.dy = -this.gameState.ball.dy;
+                }
+                
+                // Collisioni paddle
+                this.checkPaddleCollisions();
+                
+                // Goal detection
+                if (this.gameState.ball.x < 0) {
+                    this.gameState.score2++;
+                    this.resetBall();
+                } else if (this.gameState.ball.x > 800) {
+                    this.gameState.score1++;
+                    this.resetBall();
+                }
+
+                this.updateGameUI();
+            }
+
+            checkPaddleCollisions() {
+                // Paddle sinistro
+                if (this.gameState.ball.x <= 35 && 
+                    this.gameState.ball.y >= this.gameState.paddle1.y && 
+                    this.gameState.ball.y <= this.gameState.paddle1.y + this.settings.paddleSize) {
+                    this.gameState.ball.dx = Math.abs(this.gameState.ball.dx);
+                    const hitPos = (this.gameState.ball.y - this.gameState.paddle1.y - this.settings.paddleSize/2) / (this.settings.paddleSize/2);
+                    this.gameState.ball.dy += hitPos * 3;
+                }
+                
+                // Paddle destro
+                if (this.gameState.ball.x >= 765 && 
+                    this.gameState.ball.y >= this.gameState.paddle2.y && 
+                    this.gameState.ball.y <= this.gameState.paddle2.y + this.settings.paddleSize) {
+                    this.gameState.ball.dx = -Math.abs(this.gameState.ball.dx);
+                    const hitPos = (this.gameState.ball.y - this.gameState.paddle2.y - this.settings.paddleSize/2) / (this.settings.paddleSize/2);
+                    this.gameState.ball.dy += hitPos * 3;
+                }
+            }
+
+            resetBall() {
+                this.gameState.ball.x = 400;
+                this.gameState.ball.y = 200;
+                this.gameState.ball.dx = Math.random() > 0.5 ? this.settings.ballSpeed : -this.settings.ballSpeed;
+                this.gameState.ball.dy = (Math.random() - 0.5) * this.settings.ballSpeed;
+            }
+
+            resetGame() {
+                this.gameState = {
+                    ball: { x: 400, y: 200, dx: this.settings.ballSpeed, dy: 3, radius: 8 },
+                    paddle1: { x: 20, y: 150, width: 15, height: this.settings.paddleSize, dy: 0 },
+                    paddle2: { x: 765, y: 150, width: 15, height: this.settings.paddleSize, dy: 0 },
+                    score1: 0,
+                    score2: 0,
+                    gameRunning: false
+                };
+            }
+
+            updateGameUI() {
+                document.getElementById('score1').textContent = this.gameState.score1;
+                document.getElementById('score2').textContent = this.gameState.score2;
+            }
+
+            endGame() {
+                this.gameState.gameRunning = false;
+                if (this.ws) {
+                    this.ws.close();
+                    this.ws = null;
+                }
+                this.showScreen('mainMenu');
+            }
+
+            // CONTROLLI
+            initControls() {
+                document.addEventListener('keydown', (e) => {
+                    this.keys[e.key.toLowerCase()] = true;
+                    this.handleInput();
+                });
+                
+                document.addEventListener('keyup', (e) => {
+                    this.keys[e.key.toLowerCase()] = false;
+                    this.handleInput();
+                });
+
+                this.setupMobileControls();
+            }
+
+            handleInput() {
+                if (!this.gameState.gameRunning) return;
+
+                const speed = 8;
+                
+                // Player 1 controls
+                if (this.keys['q']) {
+                    this.gameState.paddle1.dy = -speed;
+                } else if (this.keys['a']) {
+                    this.gameState.paddle1.dy = speed;
+                } else {
+                    this.gameState.paddle1.dy = 0;
+                }
+                
+                // Player 2 controls (solo in single player)
+                if (this.gameMode === 'single') {
+                    if (this.keys['p']) {
+                        this.gameState.paddle2.dy = -speed;
+                    } else if (this.keys['l']) {
+                        this.gameState.paddle2.dy = speed;
+                    } else if (!this.keys['p'] && !this.keys['l']) {
+                        // AI prende il controllo se non si preme niente
+                    }
+                }
+
+                // Invia input al server se multiplayer
+                if (this.gameMode === 'multi' && this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    let input = null;
+                    if (this.playerId === 1) {
+                        if (this.keys['q']) input = 'up';
+                        else if (this.keys['a']) input = 'down';
+                    } else if (this.playerId === 2) {
+                        if (this.keys['p']) input = 'up';
+                        else if (this.keys['l']) input = 'down';
+                    }
+                    
+                    if (input) {
+                        this.ws.send(JSON.stringify({ type: 'input', input }));
+                    } else {
+                        this.ws.send(JSON.stringify({ type: 'inputStop' }));
+                    }
+                }
+            }
+
+            setupMobileControls() {
+                const buttons = {
+                    p1Up: () => this.mobilePaddle(1, 'up'),
+                    p1Down: () => this.mobilePaddle(1, 'down'),
+                    p2Up: () => this.mobilePaddle(2, 'up'),
+                    p2Down: () => this.mobilePaddle(2, 'down')
+                };
+
+                Object.keys(buttons).forEach(id => {
+                    const btn = document.getElementById(id);
+                    if (btn) {
+                        btn.addEventListener('touchstart', (e) => {
+                            e.preventDefault();
+                            buttons[id]();
+                        });
+                        btn.addEventListener('mousedown', (e) => {
+                            e.preventDefault();
+                            buttons[id]();
+                        });
+                        btn.addEventListener('touchend', (e) => {
+                            e.preventDefault();
+                            this.mobileStop();
+                        });
+                        btn.addEventListener('mouseup', (e) => {
+                            e.preventDefault();
+                            this.mobileStop();
+                        });
+                    }
+                });
+            }
+
+            mobilePaddle(player, direction) {
+                if (this.gameMode === 'single') {
+                    const speed = 8;
+                    if (player === 1) {
+                        this.gameState.paddle1.dy = direction === 'up' ? -speed : speed;
+                    } else if (player === 2) {
+                        this.gameState.paddle2.dy = direction === 'up' ? -speed : speed;
+                    }
+                } else if (this.gameMode === 'multi' && this.playerId === player) {
+                    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                        this.ws.send(JSON.stringify({ type: 'input', input: direction }));
+                    }
+                }
+            }
+
+            mobileStop() {
+                if (this.gameMode === 'single') {
+                    this.gameState.paddle1.dy = 0;
+                    this.gameState.paddle2.dy = 0;
+                } else if (this.gameMode === 'multi') {
+                    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                        this.ws.send(JSON.stringify({ type: 'inputStop' }));
+                    }
+                }
+            }
+
+            // RENDERING
+            initCanvas() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+            }
+
+            render() {
+                if (!this.canvas || !this.ctx) return;
+
+                // Sfondo
+                this.ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                // Linea centrale
+                this.ctx.strokeStyle = '#00ff88';
+                this.ctx.lineWidth = 2;
+                this.ctx.setLineDash([10, 10]);
+                this.ctx.beginPath();
+                this.ctx.moveTo(this.canvas.width / 2, 0);
+                this.ctx.lineTo(this.canvas.width / 2, this.canvas.height);
+                this.ctx.stroke();
+                this.ctx.setLineDash([]);
+                
+                // Paddle 1
+                this.ctx.fillStyle = '#00ff88';
+                this.ctx.fillRect(this.gameState.paddle1.x, this.gameState.paddle1.y, 
+                                this.gameState.paddle1.width, this.gameState.paddle1.height);
+                
+                // Paddle 2
+                this.ctx.fillRect(this.gameState.paddle2.x, this.gameState.paddle2.y, 
+                                this.gameState.paddle2.width, this.gameState.paddle2.height);
+                
+                // Palla con effetto glow
+                this.ctx.shadowColor = '#00ff88';
+                this.ctx.shadowBlur = 15;
+                this.ctx.beginPath();
+                this.ctx.arc(this.gameState.ball.x, this.gameState.ball.y, 
+                           this.gameState.ball.radius, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.shadowBlur = 0;
+            }
+        }
+
+        // FUNZIONI GLOBALI PER L'INTERFACCIA
+        let game;
+
+        function showScreen(screenId) {
+            if (!game) game = new PongUltimate();
+            game.showScreen(screenId);
+        }
+
+        function startSinglePlayer() {
+            if (!game) game = new PongUltimate();
+            game.startSinglePlayer();
+        }
+
+        function startMultiplayer() {
+            if (!game) game = new PongUltimate();
+            game.startMultiplayer();
+        }
+
+        function toggleReady() {
+            if (game) game.toggleReady();
+        }
+
+        function disconnect() {
+            if (game) game.disconnect();
+        }
+
+        function endGame() {
+            if (game) game.endGame();
+        }
+
+        function showAbout() {
+            if (!game) game = new PongUltimate();
+            game.showAbout();
+        }
+
+        // Inizializza il gioco
+        window.addEventListener('load', () => {
+            game = new PongUltimate();
+        });
+    </script>
+</body>
+</html>
