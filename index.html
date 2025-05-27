@@ -1,30 +1,4 @@
-// MODALITÀ MULTIPLAYER - Versione Semplificata
-            startMultiplayer() {
-                if (!this.currentUser) {
-                    alert('Devi effettuare il login per giocare online!');
-                    return;
-                }
-                console.log('🌐 Avvio multiplayer per:', this.currentUser.username);
-                this.gameMode = 'multi';
-                this.showScreen('lobby');
-                this.connectToServerSimple();
-            }
-
-            connectToServerSimple() {
-                // URL per Render (modifica se usi altro servizio)
-                const serverUrl = `wss://${window.location.hostname}`;
-                
-                document.getElementById('lobbyStatus').textContent = 'Connessione al server...';
-                console.log('🔌 Connessione a:', serverUrl);
-                
-                try {
-                    this.ws = new WebSocket(serverUrl);
-                    
-                    this.ws.onopen = () => {
-                        console.log('✅ WebSocket connesso! Facendo login...');
-                        document.getElementById('lobbyStatus').textContent = 'Connesso! Login in corso...';
-                        
-                        // Login IMMEDI<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
@@ -237,6 +211,11 @@
             min-width: 200px;
         }
 
+        .status.waiting {
+            border-color: #ffaa00;
+            background: rgba(255, 170, 0, 0.1);
+        }
+
         canvas {
             border: 3px solid #00ff88;
             border-radius: 10px;
@@ -358,6 +337,24 @@
             0% { transform: scale(0.5); opacity: 0; }
             50% { transform: scale(1.2); opacity: 1; }
             100% { transform: scale(1); opacity: 1; }
+        }
+
+        .launch-button {
+            padding: 15px 30px;
+            background: rgba(0, 170, 255, 0.2);
+            border: 2px solid #00aaff;
+            border-radius: 25px;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.3s ease;
+            animation: pulse 1.5s infinite;
+        }
+
+        .launch-button:hover {
+            background: rgba(0, 170, 255, 0.4);
+            transform: scale(1.05);
         }
     </style>
 </head>
@@ -499,6 +496,8 @@
                     </div>
                 </div>
 
+                <button class="launch-button" id="launchButton" onclick="launchBall()" style="display: none; margin-top: 20px;">🚀 LANCIA LA PALLA (SPAZIO)</button>
+
                 <button class="back-button" onclick="endGame()">← MENU</button>
             </div>
         </div>
@@ -528,6 +527,8 @@
                 this.playerReady = false;
                 this.opponentReady = false;
                 this.currentUser = null;
+                this.waitingForLaunch = false;
+                this.lastScorer = null;
                 
                 this.settings = {
                     ballSpeed: 5,
@@ -542,7 +543,8 @@
                     paddle2: { x: 765, y: 150, width: 15, height: 100, dy: 0 },
                     score1: 0,
                     score2: 0,
-                    gameRunning: false
+                    gameRunning: false,
+                    ballPaused: false
                 };
 
                 this.keys = {};
@@ -781,58 +783,33 @@
                 console.log('🌐 Avvio multiplayer per:', this.currentUser.username);
                 this.gameMode = 'multi';
                 this.showScreen('lobby');
-                this.connectToServer();
+                this.connectToServerSimple();
             }
 
-            connectToServer() {
-                const isGlitch = window.location.hostname.includes('glitch.me');
-                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            connectToServerSimple() {
+                // URL per Render (modifica se usi altro servizio)
+                const serverUrl = `wss://${window.location.hostname}`;
                 
-                let serverUrl;
-                if (isGlitch) {
-                    serverUrl = `wss://${window.location.hostname}`;
-                } else {
-                    serverUrl = `${protocol}//${this.settings.serverIP}:${this.settings.serverPort}`;
-                }
-                
-                document.getElementById('lobbyStatus').textContent = `Connessione a ${serverUrl}...`;
+                document.getElementById('lobbyStatus').textContent = 'Connessione al server...';
                 console.log('🔌 Connessione a:', serverUrl);
                 
                 try {
                     this.ws = new WebSocket(serverUrl);
                     
                     this.ws.onopen = () => {
-                        console.log('✅ WebSocket connesso!');
-                        document.getElementById('lobbyStatus').textContent = 'Connesso! Effettuando login...';
+                        console.log('✅ WebSocket connesso! Facendo login...');
+                        document.getElementById('lobbyStatus').textContent = 'Connesso! Login in corso...';
                         
-                        // Login diretto per multiplayer (semplificato)
-                        if (this.currentUser) {
-                            console.log('🔑 Login diretto per multiplayer:', this.currentUser.username);
-                            const savedPassword = localStorage.getItem('pong_temp_password');
-                            
-                            // Usa password salvata o fallback per account demo
-                            let password = savedPassword;
-                            if (!password) {
-                                if (this.currentUser.username === 'guest1' || this.currentUser.username === 'guest2') {
-                                    password = 'password';
-                                } else if (this.currentUser.username === 'admin') {
-                                    password = 'admin123';
-                                } else {
-                                    password = 'password';
-                                }
-                            }
-                            
-                            console.log('🔑 Tentativo login per:', this.currentUser.username);
-                            this.ws.send(JSON.stringify({
-                                type: 'login',
-                                username: this.currentUser.username,
-                                password: password
-                            }));
-                        } else {
-                            console.error('❌ Nessun currentUser trovato');
-                            document.getElementById('lobbyStatus').textContent = 'Errore: devi rifare il login';
-                            document.getElementById('lobbyStatus').style.borderColor = '#ff4444';
-                        }
+                        // Login IMMEDIATO
+                        const savedPassword = localStorage.getItem('pong_temp_password');
+                        let password = savedPassword || 'password';
+                        
+                        console.log('🔑 Login automatico per:', this.currentUser.username);
+                        this.ws.send(JSON.stringify({
+                            type: 'login',
+                            username: this.currentUser.username,
+                            password: password
+                        }));
                     };
                     
                     this.ws.onmessage = (event) => {
@@ -901,10 +878,62 @@
                         console.log('👋 Giocatore uscito');
                         this.handlePlayerLeft();
                         break;
+                    case 'goal':
+                        console.log('⚽ Goal segnato!');
+                        this.handleGoal(data);
+                        break;
+                    case 'ballLaunched':
+                        console.log('🚀 Palla lanciata!');
+                        this.waitingForLaunch = false;
+                        document.getElementById('launchButton').style.display = 'none';
+                        document.getElementById('gameStatus').textContent = 'Gioco in corso';
+                        document.getElementById('gameStatus').classList.remove('waiting');
+                        break;
+                    case 'waitingForLaunch':
+                        console.log('⏸️ In attesa di lancio');
+                        this.handleWaitingForLaunch(data);
+                        break;
                     case 'gameEnd':
                         console.log('🏁 Gioco terminato');
                         this.handleGameEnd(data);
                         break;
+                }
+            }
+
+            handleGoal(data) {
+                console.log(`⚽ Goal! Giocatore ${data.scorer} ha segnato`);
+                this.lastScorer = data.scorer;
+                this.waitingForLaunch = true;
+                
+                // Aggiorna il punteggio localmente
+                if (data.scorer === 1) {
+                    this.gameState.score1++;
+                } else {
+                    this.gameState.score2++;
+                }
+                this.updateGameUI();
+            }
+
+            handleWaitingForLaunch(data) {
+                this.waitingForLaunch = true;
+                const canLaunch = (data.lastScorer === 1 && this.playerId === 2) || 
+                                 (data.lastScorer === 2 && this.playerId === 1);
+                
+                if (canLaunch) {
+                    document.getElementById('launchButton').style.display = 'block';
+                    document.getElementById('gameStatus').textContent = 'Tocca a te lanciare!';
+                    document.getElementById('gameStatus').classList.add('waiting');
+                } else {
+                    document.getElementById('launchButton').style.display = 'none';
+                    document.getElementById('gameStatus').textContent = 'Aspettando il lancio...';
+                    document.getElementById('gameStatus').classList.add('waiting');
+                }
+            }
+
+            launchBall() {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN && this.waitingForLaunch) {
+                    console.log('🚀 Invio comando di lancio palla');
+                    this.ws.send(JSON.stringify({ type: 'launchBall' }));
                 }
             }
 
@@ -988,12 +1017,15 @@
                 const message = data.winner === this.playerId ? '🎉 HAI VINTO!' : '💔 HAI PERSO!';
                 setTimeout(() => {
                     alert(message + `\n\nPunteggio finale: ${data.finalScore.player1} - ${data.finalScore.player2}`);
+                    this.endGame();
                 }, 1000);
             }
 
             handlePlayerLeft() {
                 document.getElementById('lobbyStatus').textContent = 'Giocatore disconnesso';
                 document.getElementById('lobbyStatus').style.borderColor = '#ffaa00';
+                this.waitingForLaunch = false;
+                document.getElementById('launchButton').style.display = 'none';
             }
 
             disconnect() {
@@ -1006,34 +1038,53 @@
 
             // FISICA DEL GIOCO
             updateGamePhysics() {
+                // Muovi le racchette
                 this.gameState.paddle1.y += this.gameState.paddle1.dy;
                 this.gameState.paddle2.y += this.gameState.paddle2.dy;
                 
+                // Limita le racchette ai bordi
                 this.gameState.paddle1.y = Math.max(0, Math.min(300, this.gameState.paddle1.y));
                 this.gameState.paddle2.y = Math.max(0, Math.min(300, this.gameState.paddle2.y));
                 
-                this.gameState.ball.x += this.gameState.ball.dx;
-                this.gameState.ball.y += this.gameState.ball.dy;
-                
-                if (this.gameState.ball.y <= this.gameState.ball.radius || 
-                    this.gameState.ball.y >= 400 - this.gameState.ball.radius) {
-                    this.gameState.ball.dy = -this.gameState.ball.dy;
-                }
-                
-                this.checkPaddleCollisions();
-                
-                if (this.gameState.ball.x < 0) {
-                    this.gameState.score2++;
-                    this.resetBall();
-                } else if (this.gameState.ball.x > 800) {
-                    this.gameState.score1++;
-                    this.resetBall();
+                // Muovi la palla solo se non è in pausa
+                if (!this.gameState.ballPaused && !this.waitingForLaunch) {
+                    this.gameState.ball.x += this.gameState.ball.dx;
+                    this.gameState.ball.y += this.gameState.ball.dy;
+                    
+                    // Rimbalzo sui bordi superiore e inferiore
+                    if (this.gameState.ball.y <= this.gameState.ball.radius || 
+                        this.gameState.ball.y >= 400 - this.gameState.ball.radius) {
+                        this.gameState.ball.dy = -this.gameState.ball.dy;
+                    }
+                    
+                    // Controlla collisioni con racchette
+                    this.checkPaddleCollisions();
+                    
+                    // Controlla goal
+                    if (this.gameState.ball.x < 0) {
+                        this.gameState.score2++;
+                        this.handleLocalGoal(2);
+                    } else if (this.gameState.ball.x > 800) {
+                        this.gameState.score1++;
+                        this.handleLocalGoal(1);
+                    }
                 }
 
                 this.updateGameUI();
             }
 
+            handleLocalGoal(scorer) {
+                if (this.gameMode === 'single') {
+                    this.resetBall();
+                } else {
+                    // Nel multiplayer, ferma la palla e aspetta il lancio
+                    this.gameState.ballPaused = true;
+                    this.resetBallPosition();
+                }
+            }
+
             checkPaddleCollisions() {
+                // Collisione con racchetta sinistra
                 if (this.gameState.ball.x <= 35 && 
                     this.gameState.ball.y >= this.gameState.paddle1.y && 
                     this.gameState.ball.y <= this.gameState.paddle1.y + this.settings.paddleSize) {
@@ -1042,6 +1093,7 @@
                     this.gameState.ball.dy += hitPos * 3;
                 }
                 
+                // Collisione con racchetta destra
                 if (this.gameState.ball.x >= 765 && 
                     this.gameState.ball.y >= this.gameState.paddle2.y && 
                     this.gameState.ball.y <= this.gameState.paddle2.y + this.settings.paddleSize) {
@@ -1056,6 +1108,14 @@
                 this.gameState.ball.y = 200;
                 this.gameState.ball.dx = Math.random() > 0.5 ? this.settings.ballSpeed : -this.settings.ballSpeed;
                 this.gameState.ball.dy = (Math.random() - 0.5) * this.settings.ballSpeed;
+                this.gameState.ballPaused = false;
+            }
+
+            resetBallPosition() {
+                this.gameState.ball.x = 400;
+                this.gameState.ball.y = 200;
+                this.gameState.ball.dx = 0;
+                this.gameState.ball.dy = 0;
             }
 
             resetGame() {
@@ -1065,8 +1125,11 @@
                     paddle2: { x: 765, y: 150, width: 15, height: this.settings.paddleSize, dy: 0 },
                     score1: 0,
                     score2: 0,
-                    gameRunning: false
+                    gameRunning: false,
+                    ballPaused: false
                 };
+                this.waitingForLaunch = false;
+                document.getElementById('launchButton').style.display = 'none';
             }
 
             updateGameUI() {
@@ -1076,6 +1139,7 @@
 
             endGame() {
                 this.gameState.gameRunning = false;
+                this.waitingForLaunch = false;
                 if (this.ws) {
                     this.ws.close();
                     this.ws = null;
@@ -1089,6 +1153,14 @@
                     if (this.currentScreen === 'loginScreen') {
                         if (e.key === 'Enter') {
                             attemptLogin();
+                        }
+                    } else if (this.currentScreen === 'gameScreen') {
+                        if (e.key === ' ' && this.waitingForLaunch) {
+                            e.preventDefault();
+                            this.launchBall();
+                        } else {
+                            this.keys[e.key.toLowerCase()] = true;
+                            this.handleInput();
                         }
                     } else {
                         this.keys[e.key.toLowerCase()] = true;
@@ -1122,11 +1194,7 @@
                         this.gameState.paddle1.y = paddleY;
                         this.gameState.paddle1.dy = 0;
                     } else if (this.gameMode === 'multi' && this.playerId) {
-                        if (this.playerId === 1) {
-                            this.sendMouseInput(paddleY);
-                        } else if (this.playerId === 2) {
-                            this.sendMouseInput(paddleY);
-                        }
+                        this.sendMouseInput(paddleY);
                     }
                 });
 
@@ -1149,6 +1217,7 @@
 
                 const speed = 8;
                 
+                // Controlli giocatore 1
                 if (this.keys['q']) {
                     this.gameState.paddle1.dy = -speed;
                 } else if (this.keys['a']) {
@@ -1157,16 +1226,18 @@
                     this.gameState.paddle1.dy = 0;
                 }
                 
+                // Controlli giocatore 2 (solo in single player)
                 if (this.gameMode === 'single') {
                     if (this.keys['p']) {
                         this.gameState.paddle2.dy = -speed;
                     } else if (this.keys['l']) {
                         this.gameState.paddle2.dy = speed;
                     } else if (!this.keys['p'] && !this.keys['l']) {
-                        // AI prende il controllo
+                        // AI prende il controllo se nessun tasto premuto
                     }
                 }
 
+                // Invio input al server per multiplayer
                 if (this.gameMode === 'multi' && this.ws && this.ws.readyState === WebSocket.OPEN) {
                     let input = null;
                     if (this.playerId === 1) {
@@ -1251,9 +1322,11 @@
             render() {
                 if (!this.canvas || !this.ctx) return;
 
+                // Sfondo con effetto fade
                 this.ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
                 this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
                 
+                // Linea centrale
                 this.ctx.strokeStyle = '#00ff88';
                 this.ctx.lineWidth = 2;
                 this.ctx.setLineDash([10, 10]);
@@ -1263,6 +1336,7 @@
                 this.ctx.stroke();
                 this.ctx.setLineDash([]);
                 
+                // Racchette
                 this.ctx.fillStyle = '#00ff88';
                 this.ctx.fillRect(this.gameState.paddle1.x, this.gameState.paddle1.y, 
                                 this.gameState.paddle1.width, this.gameState.paddle1.height);
@@ -1270,6 +1344,7 @@
                 this.ctx.fillRect(this.gameState.paddle2.x, this.gameState.paddle2.y, 
                                 this.gameState.paddle2.width, this.gameState.paddle2.height);
                 
+                // Palla
                 this.ctx.shadowColor = '#00ff88';
                 this.ctx.shadowBlur = 15;
                 this.ctx.beginPath();
@@ -1375,6 +1450,10 @@
         function showAbout() {
             if (!game) game = new PongUltimate();
             game.showAbout();
+        }
+
+        function launchBall() {
+            if (game) game.launchBall();
         }
 
         window.addEventListener('load', () => {
