@@ -45,11 +45,16 @@ class PongServer {
     }
     
     handleRequest(req, res) {
+        // Aggiungi headers CORS per servizi cloud
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        
         if (req.url === '/') {
             // Serve il file HTML del gioco
-            const htmlPath = path.join(__dirname, 'pong.html');
+            const htmlPath = path.join(__dirname, 'index.html');
             
-            // Se hai salvato l'HTML separatamente, usa questo:
+            // Prova prima con index.html (standard Glitch)
             if (fs.existsSync(htmlPath)) {
                 fs.readFile(htmlPath, (err, data) => {
                     if (err) {
@@ -61,14 +66,38 @@ class PongServer {
                     res.end(data);
                 });
             } else {
-                // HTML inline per semplificare
-                res.writeHead(200, { 'Content-Type': 'text/html' });
-                res.end(`
-                    <h1>Server Pong Attivo!</h1>
-                    <p>Salva il codice HTML del gioco come 'pong.html' nella stessa cartella del server,</p>
-                    <p>oppure accedi direttamente al gioco dal browser dove hai aperto l'HTML.</p>
-                    <p><strong>WebSocket server attivo su ws://localhost:3000</strong></p>
-                `);
+                // Fallback per pong.html
+                const pongPath = path.join(__dirname, 'pong.html');
+                if (fs.existsSync(pongPath)) {
+                    fs.readFile(pongPath, (err, data) => {
+                        if (err) {
+                            res.writeHead(500);
+                            res.end('Errore nel caricamento del gioco');
+                            return;
+                        }
+                        res.writeHead(200, { 'Content-Type': 'text/html' });
+                        res.end(data);
+                    });
+                } else {
+                    // HTML inline di debug
+                    res.writeHead(200, { 'Content-Type': 'text/html' });
+                    res.end(`
+                        <h1>🏓 Server Pong Ultimate Attivo!</h1>
+                        <p><strong>WebSocket server attivo!</strong></p>
+                        <p>File HTML non trovato. Assicurati di avere:</p>
+                        <ul>
+                            <li><code>index.html</code> (preferito)</li>
+                            <li>oppure <code>pong.html</code></li>
+                        </ul>
+                        <p><strong>URL WebSocket:</strong> <code>wss://${req.headers.host}</code></p>
+                        <script>
+                            console.log('🏓 Tentativo connessione WebSocket...');
+                            const ws = new WebSocket('wss://' + window.location.host);
+                            ws.onopen = () => console.log('✅ WebSocket OK!');
+                            ws.onerror = (e) => console.error('❌ WebSocket ERROR:', e);
+                        </script>
+                    `);
+                }
             }
         } else {
             res.writeHead(404);
