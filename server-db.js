@@ -9,7 +9,7 @@ class PongServerDB {
         this.server = http.createServer(this.handleRequest.bind(this));
         this.wss = new WebSocket.Server({ server: this.server });
         
-        // MongoDB connection - DEBUG
+        // MongoDB connection
         console.log('🔍 DEBUG - process.env.MONGODB_URL:', process.env.MONGODB_URL ? 'TROVATO' : 'NON TROVATO');
         console.log('🔍 DEBUG - Valore:', process.env.MONGODB_URL);
         
@@ -45,6 +45,7 @@ class PongServerDB {
         }).catch(error => {
             console.error('❌ Errore connessione database:', error);
             console.log('⚠️  Server avviato senza database (modalità memoria)');
+            this.createDemoUsersInMemory();
             this.setupWebSocket();
         });
     }
@@ -52,8 +53,7 @@ class PongServerDB {
     async initDatabase() {
         try {
             console.log('🔌 Tentativo connessione MongoDB...');
-            console.log('📍 URL MongoDB:', this.mongoUrl);
-            console.log('🔗 URL nascosto:', this.mongoUrl.replace(/:[^:@]*@/, ':***@'));
+            console.log('📍 URL MongoDB:', this.mongoUrl.replace(/:[^:@]*@/, ':***@'));
             
             this.client = new MongoClient(this.mongoUrl, {
                 connectTimeoutMS: 10000,
@@ -66,18 +66,15 @@ class PongServerDB {
             
             this.db = this.client.db(this.dbName);
             
-            // Test connessione con ping
             console.log('🏓 Ping al database...');
             await this.db.admin().ping();
             console.log('✅ Ping riuscito!');
             
-            // Crea collezioni se non esistono
             console.log('📁 Creazione collezioni...');
             await this.db.createCollection('users');
             await this.db.collection('users').createIndex({ username: 1 }, { unique: true });
             console.log('📁 Collezioni create!');
             
-            // Crea utenti demo se non esistono
             await this.createDemoUsers();
             
             console.log('✅ Database MongoDB connesso e pronto!');
@@ -86,31 +83,10 @@ class PongServerDB {
             console.error('   - Tipo errore:', error.name);
             console.error('   - Messaggio:', error.message);
             console.error('   - Codice:', error.code);
-            if (error.cause) {
-                console.error('   - Causa:', error.cause);
-            }
             console.log('⚠️  Continuo senza database - userò utenti demo in memoria');
             this.db = null;
             this.createDemoUsersInMemory();
         }
-    }
-
-    createDemoUsersInMemory() {
-        // Fallback: utenti in memoria se DB non funziona
-        this.users = new Map();
-        this.users.set('guest1', {
-            password: 'password',
-            stats: { wins: 5, losses: 3, games: 8 }
-        });
-        this.users.set('guest2', {
-            password: 'password',
-            stats: { wins: 2, losses: 6, games: 8 }
-        });
-        this.users.set('admin', {
-            password: 'admin123',
-            stats: { wins: 10, losses: 2, games: 12 }
-        });
-        console.log('📝 Utenti demo caricati in memoria');
     }
 
     async createDemoUsers() {
@@ -130,6 +106,23 @@ class PongServerDB {
                 // Utente già esistente, ignora errore
             }
         }
+    }
+
+    createDemoUsersInMemory() {
+        this.users = new Map();
+        this.users.set('guest1', {
+            password: 'password',
+            stats: { wins: 5, losses: 3, games: 8 }
+        });
+        this.users.set('guest2', {
+            password: 'password',
+            stats: { wins: 2, losses: 6, games: 8 }
+        });
+        this.users.set('admin', {
+            password: 'admin123',
+            stats: { wins: 10, losses: 2, games: 12 }
+        });
+        console.log('📝 Utenti demo caricati in memoria');
     }
 
     initGameState() {
@@ -214,7 +207,14 @@ class PongServerDB {
                 break;
             case 'joinLobby':
                 if (session) {
+                    console.log(`🎯 ${session.username} richiede joinLobby (già autenticato)`);
                     this.joinLobby(ws);
+                } else {
+                    console.log('❌ Tentativo joinLobby senza autenticazione');
+                    ws.send(JSON.stringify({ 
+                        type: 'error', 
+                        message: 'Devi fare login prima di entrare in lobby' 
+                    }));
                 }
                 break;
             case 'playerReady':
@@ -241,26 +241,29 @@ class PongServerDB {
             case 'getStats':
                 await this.handleGetStats(ws);
                 break;
+            default:
+                console.log(`⚠️ Messaggio non gestito: ${message.type}`);
+                break;
         }
     }
 
     async handleLogin(ws, message) {
         const { username, password } = message;
         
+        console.log(`🔑 Tentativo login: ${username}`);
+        
         try {
             let user;
             if (this.db) {
+                console.log('💾 Controllo nel database MongoDB...');
                 user = await this.db.collection('users').findOne({ username });
             } else {
-                // Fallback per utenti demo in memoria
-                const demoUsers = {
-                    'guest1': { password: 'password', stats: { wins: 5, losses: 3, games: 8 } },
-                    'guest2': { password: 'password', stats: { wins: 2, losses: 6, games: 8 } }
-                };
-                user = demoUsers[username];
+                console.log('📝 Controllo negli utenti demo in memoria...');
+                user = this.users ? this.users.get(username) : null;
             }
 
             if (!user) {
+                console.log(`❌ Utente ${username} non trovato`);
                 ws.send(JSON.stringify({ 
                     type: 'loginResult', 
                     success: false, 
@@ -270,6 +273,7 @@ class PongServerDB {
             }
 
             if (user.password !== password) {
+                console.log(`❌ Password errata per ${username}`);
                 ws.send(JSON.stringify({ 
                     type: 'loginResult', 
                     success: false, 
@@ -281,6 +285,7 @@ class PongServerDB {
             // Controlla se l'utente è già connesso
             for (let [otherWs, otherSession] of this.activeSessions) {
                 if (otherSession.username === username && otherWs !== ws) {
+                    console.log(`❌ ${username} già connesso da altra sessione`);
                     ws.send(JSON.stringify({ 
                         type: 'loginResult', 
                         success: false, 
@@ -300,9 +305,9 @@ class PongServerDB {
                 stats: user.stats
             }));
 
-            console.log(`👤 ${username} ha effettuato il login`);
+            console.log(`✅ ${username} ha effettuato il login con successo`);
         } catch (error) {
-            console.error('Errore login:', error);
+            console.error('💥 Errore login:', error.message);
             ws.send(JSON.stringify({ 
                 type: 'loginResult', 
                 success: false, 
@@ -400,12 +405,7 @@ class PongServerDB {
                 if (this.db) {
                     user = await this.db.collection('users').findOne({ username: session.username });
                 } else {
-                    // Fallback per demo users
-                    const demoUsers = {
-                        'guest1': { stats: { wins: 5, losses: 3, games: 8 } },
-                        'guest2': { stats: { wins: 2, losses: 6, games: 8 } }
-                    };
-                    user = demoUsers[session.username];
+                    user = this.users ? this.users.get(session.username) : null;
                 }
 
                 if (user) {
@@ -423,18 +423,27 @@ class PongServerDB {
 
     joinLobby(ws) {
         const session = this.activeSessions.get(ws);
-        if (!session) return;
+        if (!session) {
+            console.log('❌ Tentativo joinLobby senza session');
+            return;
+        }
+
+        console.log(`🎯 ${session.username} vuole entrare in lobby`);
+        console.log(`🎯 Stato lobby: P1=${this.lobbyState.player1Name || 'vuoto'}, P2=${this.lobbyState.player2Name || 'vuoto'}`);
 
         let playerId = null;
         if (!this.lobbyState.player1) {
             playerId = 1;
             this.lobbyState.player1 = ws;
             this.lobbyState.player1Name = session.username;
+            console.log(`👤 ${session.username} assegnato come GIOCATORE 1`);
         } else if (!this.lobbyState.player2) {
             playerId = 2;
             this.lobbyState.player2 = ws;
             this.lobbyState.player2Name = session.username;
+            console.log(`👤 ${session.username} assegnato come GIOCATORE 2`);
         } else {
+            console.log(`❌ Lobby piena! P1=${this.lobbyState.player1Name}, P2=${this.lobbyState.player2Name}`);
             ws.send(JSON.stringify({ type: 'error', message: 'Lobby piena!' }));
             return;
         }
@@ -445,13 +454,18 @@ class PongServerDB {
         
         ws.send(JSON.stringify({ type: 'playerId', id: playerId }));
         
-        console.log(`👤 ${session.username} è entrato in lobby come giocatore ${playerId}`);
+        console.log(`✅ ${session.username} in lobby come giocatore ${playerId} (${this.lobbyState.playersCount}/2)`);
         
         this.broadcastLobbyState();
     }
 
     handlePlayerReady(ws, ready) {
         const playerData = this.players.get(ws);
+        if (!playerData) {
+            console.log('❌ handlePlayerReady: playerData non trovato');
+            return;
+        }
+
         playerData.ready = ready;
         
         if (playerData.id === 1) {
@@ -460,14 +474,17 @@ class PongServerDB {
             this.lobbyState.player2Ready = ready;
         }
         
-        console.log(`🎯 Giocatore ${playerData.id} ${ready ? 'PRONTO' : 'non pronto'}`);
+        console.log(`🎯 Giocatore ${playerData.id} (${playerData.username}) ${ready ? 'PRONTO' : 'non pronto'}`);
+        console.log(`🎯 Stato: P1=${this.lobbyState.player1Ready ? 'PRONTO' : 'non pronto'}, P2=${this.lobbyState.player2Ready ? 'PRONTO' : 'non pronto'}`);
         
         this.broadcastLobbyState();
         
         if (this.lobbyState.player1Ready && this.lobbyState.player2Ready && 
             this.lobbyState.playersCount === 2) {
-            console.log('🚀 Entrambi i giocatori pronti! Iniziando il gioco...');
+            console.log('🚀 ENTRAMBI PRONTI! Iniziando il gioco in 1 secondo...');
             setTimeout(() => this.startGame(), 1000);
+        } else {
+            console.log(`⏳ Aspettando: P1=${this.lobbyState.player1Ready ? '✅' : '❌'}, P2=${this.lobbyState.player2Ready ? '✅' : '❌'}, Count=${this.lobbyState.playersCount}/2`);
         }
     }
 
@@ -539,19 +556,15 @@ class PongServerDB {
     updateGame() {
         if (!this.gameRunning) return;
         
-        // Aggiorna paddle
         this.gameState.paddle1.y += this.gameState.paddle1.dy;
         this.gameState.paddle2.y += this.gameState.paddle2.dy;
         
-        // Limiti paddle
         this.gameState.paddle1.y = Math.max(0, Math.min(300, this.gameState.paddle1.y));
         this.gameState.paddle2.y = Math.max(0, Math.min(300, this.gameState.paddle2.y));
         
-        // Aggiorna palla
         this.gameState.ball.x += this.gameState.ball.dx;
         this.gameState.ball.y += this.gameState.ball.dy;
         
-        // Rimbalzo sui bordi verticali
         if (this.gameState.ball.y <= this.gameState.ball.radius || 
             this.gameState.ball.y >= 400 - this.gameState.ball.radius) {
             this.gameState.ball.dy = -this.gameState.ball.dy;
@@ -648,6 +661,17 @@ class PongServerDB {
                             }
                         );
                         console.log(`📊 Stats aggiornate nel DB per ${session.username}`);
+                    } else if (this.users) {
+                        const user = this.users.get(session.username);
+                        if (user) {
+                            user.stats.games++;
+                            if (playerData.id === winner) {
+                                user.stats.wins++;
+                            } else {
+                                user.stats.losses++;
+                            }
+                            console.log(`📊 Stats aggiornate in memoria per ${session.username}`);
+                        }
                     }
                 } catch (error) {
                     console.error('Errore aggiornamento statistiche:', error);
@@ -724,6 +748,13 @@ class PongServerDB {
         });
     }
 
+    async close() {
+        if (this.client) {
+            await this.client.close();
+            console.log('📦 Connessione database chiusa');
+        }
+    }
+
     start(port = process.env.PORT || 3000) {
         this.server.listen(port, '0.0.0.0', () => {
             console.log(`🌟 Server in ascolto sulla porta ${port}`);
@@ -732,13 +763,6 @@ class PongServerDB {
                 console.log(`🚀 URL pubblico: ${process.env.RENDER_EXTERNAL_URL}`);
             }
         });
-    }
-
-    async close() {
-        if (this.client) {
-            await this.client.close();
-            console.log('📦 Connessione database chiusa');
-        }
     }
 }
 
