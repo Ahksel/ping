@@ -1,112 +1,4 @@
-// SISTEMA UTENTI
-            login(username, password) {
-                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                    this.ws.send(JSON.stringify({
-                        type: 'login',
-                        username: username,
-                        password: password
-                    }));
-                } else {
-                    // Connetti prima al server per login
-                    this.connectForAuth(() => {
-                        this.ws.send(JSON.stringify({
-                            type: 'login',
-                            username: username,
-                            password: password
-                        }));
-                    });
-                }
-            }
-
-            register(username, password) {
-                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                    this.ws.send(JSON.stringify({
-                        type: 'register',
-                        username: username,
-                        password: password
-                    }));
-                } else {
-                    this.connectForAuth(() => {
-                        this.ws.send(JSON.stringify({
-                            type: 'register',
-                            username: username,
-                            password: password
-                        }));
-                    });
-                }
-            }
-
-            connectForAuth(callback) {
-                const isGlitch = window.location.hostname.includes('glitch.me');
-                const serverUrl = isGlitch ? `wss://${window.location.hostname}` : 
-                                            `ws://${this.settings.serverIP}:${this.settings.serverPort}`;
-                
-                this.ws = new WebSocket(serverUrl);
-                this.ws.onopen = () => {
-                    if (callback) callback();
-                };
-                this.ws.onmessage = (event) => {
-                    const data = JSON.parse(event.data);
-                    this.handleAuthMessage(data);
-                };
-            }
-
-            handleAuthMessage(data) {
-                switch (data.type) {
-                    case 'loginResult':
-                        if (data.success) {
-                            this.currentUser = {
-                                username: data.username,
-                                stats: data.stats
-                            };
-                            localStorage.setItem('pong_user', JSON.stringify(this.currentUser));
-                            this.showMainMenu();
-                            document.getElementById('loginMessage').textContent = '';
-                        } else {
-                            document.getElementById('loginMessage').textContent = data.message;
-                            document.getElementById('loginMessage').style.color = '#ff4444';
-                        }
-                        break;
-                    case 'registerResult':
-                        if (data.success) {
-                            document.getElementById('loginMessage').textContent = data.message;
-                            document.getElementById('loginMessage').style.color = '#00ff88';
-                        } else {
-                            document.getElementById('loginMessage').textContent = data.message;
-                            document.getElementById('loginMessage').style.color = '#ff4444';
-                        }
-                        break;
-                    case 'userStats':
-                        this.showStatsModal(data.username, data.stats);
-                        break;
-                }
-            }
-
-            logout() {
-                localStorage.removeItem('pong_user');
-                this.currentUser = null;
-                if (this.ws) {
-                    this.ws.close();
-                    this.ws = null;
-                }
-                this.showScreen('loginScreen');
-                document.getElementById('loginMessage').textContent = '';
-            }
-
-            getUserStats() {
-                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                    this.ws.send(JSON.stringify({ type: 'getStats' }));
-                }
-            }
-
-            showStatsModal(username, stats) {
-                const winRate = stats.games > 0 ? ((stats.wins / stats.games) * 100).toFixed(1) : 0;
-                alert(`📊 Statistiche di ${username}\n\n` +
-                      `🏆 Vittorie: ${stats.wins}\n` +
-                      `💔 Sconfitte: ${stats.losses}\n` +
-                      `🎮 Partite totali: ${stats.games}\n` +
-                      `📈 Percentuale vittorie: ${winRate}%`);
-            }<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
@@ -603,23 +495,21 @@
     <script>
         class PongUltimate {
             constructor() {
-                this.currentScreen = 'loginScreen'; // Inizia con login
-                this.gameMode = null; // 'single' or 'multi'
+                this.currentScreen = 'loginScreen';
+                this.gameMode = null;
                 this.ws = null;
                 this.playerId = null;
                 this.playerReady = false;
                 this.opponentReady = false;
-                this.currentUser = null; // Utente loggato
+                this.currentUser = null;
                 
-                // Impostazioni
                 this.settings = {
                     ballSpeed: 5,
                     paddleSize: 100,
-                    serverIP: window.location.hostname || 'localhost', // Auto-rileva l'host
+                    serverIP: window.location.hostname || 'localhost',
                     serverPort: window.location.port || 3000
                 };
 
-                // Stato gioco
                 this.gameState = {
                     ball: { x: 400, y: 200, dx: 5, dy: 3, radius: 8 },
                     paddle1: { x: 20, y: 150, width: 15, height: 100, dy: 0 },
@@ -630,7 +520,7 @@
                 };
 
                 this.keys = {};
-                this.aiSpeed = 0.6; // Velocità AI per single player
+                this.aiSpeed = 0.6;
 
                 this.initCanvas();
                 this.initControls();
@@ -639,7 +529,6 @@
             }
 
             checkAutoLogin() {
-                // Controlla se ci sono credenziali salvate
                 const savedUser = localStorage.getItem('pong_user');
                 if (savedUser) {
                     try {
@@ -660,7 +549,6 @@
                 }
             }
 
-            // GESTIONE SCHERMATE
             showScreen(screenId) {
                 document.querySelectorAll('.screen').forEach(screen => {
                     screen.classList.remove('active');
@@ -682,7 +570,6 @@
                         password: password
                     }));
                 } else {
-                    // Connetti prima al server per login
                     this.connectForAuth(() => {
                         this.ws.send(JSON.stringify({
                             type: 'login',
@@ -761,7 +648,6 @@
                         this.showStatsModal(data.username, data.stats);
                         break;
                     default:
-                        // Passa altri messaggi al gestore normale
                         this.handleServerMessage(data);
                         break;
                 }
@@ -797,7 +683,6 @@
 
             // IMPOSTAZIONI
             loadSettings() {
-                // Auto-rileva se siamo su Glitch o altri servizi
                 const isOnlineService = window.location.hostname.includes('glitch.me') || 
                                       window.location.hostname.includes('onrender.com') ||
                                       window.location.hostname !== 'localhost';
@@ -812,7 +697,6 @@
                 document.getElementById('serverIP').value = this.settings.serverIP;
                 document.getElementById('serverPort').value = this.settings.serverPort;
 
-                // Event listeners per impostazioni
                 document.getElementById('ballSpeed').addEventListener('input', (e) => {
                     this.settings.ballSpeed = parseInt(e.target.value);
                 });
@@ -845,7 +729,6 @@
             }
 
             updateSinglePlayer() {
-                // AI per paddle destro
                 const ballY = this.gameState.ball.y;
                 const paddleCenter = this.gameState.paddle2.y + this.gameState.paddle2.height / 2;
                 
@@ -862,38 +745,66 @@
 
             // MODALITÀ MULTIPLAYER
             startMultiplayer() {
+                if (!this.currentUser) {
+                    alert('Devi effettuare il login per giocare online!');
+                    return;
+                }
+                console.log('🌐 Avvio multiplayer per:', this.currentUser.username);
                 this.gameMode = 'multi';
                 this.showScreen('lobby');
                 this.connectToServer();
             }
 
             connectToServer() {
-                // Su Glitch usa sempre lo stesso host ma con WebSocket sicuro
                 const isGlitch = window.location.hostname.includes('glitch.me');
                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                 
                 let serverUrl;
                 if (isGlitch) {
-                    // Per Glitch usa semplicemente lo stesso dominio con wss
                     serverUrl = `wss://${window.location.hostname}`;
                 } else {
                     serverUrl = `${protocol}//${this.settings.serverIP}:${this.settings.serverPort}`;
                 }
                 
                 document.getElementById('lobbyStatus').textContent = `Connessione a ${serverUrl}...`;
+                console.log('🔌 Connessione a:', serverUrl);
                 
                 try {
                     this.ws = new WebSocket(serverUrl);
                     
                     this.ws.onopen = () => {
-                        document.getElementById('lobbyStatus').textContent = 'Connesso! Aspettando altro giocatore...';
                         console.log('✅ WebSocket connesso!');
+                        document.getElementById('lobbyStatus').textContent = 'Connesso! Effettuando login...';
+                        
+                        if (this.currentUser) {
+                            console.log('🔑 Auto-login per:', this.currentUser.username);
+                            this.ws.send(JSON.stringify({
+                                type: 'login',
+                                username: this.currentUser.username,
+                                password: 'dummy'
+                            }));
+                        }
                     };
                     
                     this.ws.onmessage = (event) => {
                         const data = JSON.parse(event.data);
-                        console.log('📨 Messaggio ricevuto:', data);
-                        this.handleServerMessage(data);
+                        
+                        if (data.type === 'loginResult') {
+                            if (data.success) {
+                                console.log('✅ Auto-login riuscito, entro in lobby...');
+                                document.getElementById('lobbyStatus').textContent = 'Login effettuato! Entrando in lobby...';
+                                
+                                setTimeout(() => {
+                                    console.log('🚪 Invio richiesta joinLobby');
+                                    this.ws.send(JSON.stringify({ type: 'joinLobby' }));
+                                }, 500);
+                            } else {
+                                console.error('❌ Auto-login fallito:', data.message);
+                                document.getElementById('lobbyStatus').textContent = 'Errore login: ' + data.message;
+                            }
+                        } else {
+                            this.handleServerMessage(data);
+                        }
                     };
                     
                     this.ws.onclose = (event) => {
@@ -915,15 +826,19 @@
             }
 
             handleServerMessage(data) {
+                console.log('📨 Messaggio dal server:', data.type);
                 switch (data.type) {
                     case 'playerId':
                         this.playerId = data.id;
+                        console.log(`🎮 Ricevuto ID giocatore: ${this.playerId}`);
                         this.updateLobbyUI();
                         break;
                     case 'lobbyUpdate':
+                        console.log('🔄 Aggiornamento lobby:', data);
                         this.updateLobbyState(data);
                         break;
                     case 'gameStart':
+                        console.log('🚀 Gioco iniziato!');
                         this.startCountdown();
                         break;
                     case 'gameState':
@@ -931,12 +846,20 @@
                         this.updateGameUI();
                         break;
                     case 'playerLeft':
+                        console.log('👋 Giocatore uscito');
                         this.handlePlayerLeft();
+                        break;
+                    case 'gameEnd':
+                        console.log('🏁 Gioco terminato');
+                        this.handleGameEnd(data);
                         break;
                 }
             }
 
             updateLobbyState(data) {
+                document.getElementById('player1Name').textContent = data.player1Name || 'Giocatore 1';
+                document.getElementById('player2Name').textContent = data.player2Name || 'Giocatore 2';
+                
                 document.getElementById('player1Status').textContent = data.player1 ? (data.player1Ready ? 'PRONTO!' : 'Connesso') : 'In attesa...';
                 document.getElementById('player2Status').textContent = data.player2 ? (data.player2Ready ? 'PRONTO!' : 'Connesso') : 'In attesa...';
                 
@@ -946,6 +869,8 @@
                 if (data.playersCount === 2) {
                     document.getElementById('lobbyStatus').textContent = 'Entrambi i giocatori connessi!';
                     document.getElementById('readyButton1').style.display = 'block';
+                } else {
+                    document.getElementById('lobbyStatus').textContent = 'Aspettando altro giocatore...';
                 }
             }
 
@@ -997,6 +922,28 @@
                 }
             }
 
+            handleGameEnd(data) {
+                if (this.currentUser && data.winner) {
+                    if (data.winner === this.playerId) {
+                        this.currentUser.stats.wins++;
+                    } else {
+                        this.currentUser.stats.losses++;
+                    }
+                    this.currentUser.stats.games++;
+                    localStorage.setItem('pong_user', JSON.stringify(this.currentUser));
+                }
+                
+                const message = data.winner === this.playerId ? '🎉 HAI VINTO!' : '💔 HAI PERSO!';
+                setTimeout(() => {
+                    alert(message + `\n\nPunteggio finale: ${data.finalScore.player1} - ${data.finalScore.player2}`);
+                }, 1000);
+            }
+
+            handlePlayerLeft() {
+                document.getElementById('lobbyStatus').textContent = 'Giocatore disconnesso';
+                document.getElementById('lobbyStatus').style.borderColor = '#ffaa00';
+            }
+
             disconnect() {
                 if (this.ws) {
                     this.ws.close();
@@ -1007,28 +954,22 @@
 
             // FISICA DEL GIOCO
             updateGamePhysics() {
-                // Aggiorna paddle
                 this.gameState.paddle1.y += this.gameState.paddle1.dy;
                 this.gameState.paddle2.y += this.gameState.paddle2.dy;
                 
-                // Limiti paddle
                 this.gameState.paddle1.y = Math.max(0, Math.min(300, this.gameState.paddle1.y));
                 this.gameState.paddle2.y = Math.max(0, Math.min(300, this.gameState.paddle2.y));
                 
-                // Aggiorna palla
                 this.gameState.ball.x += this.gameState.ball.dx;
                 this.gameState.ball.y += this.gameState.ball.dy;
                 
-                // Rimbalzo bordi verticali
                 if (this.gameState.ball.y <= this.gameState.ball.radius || 
                     this.gameState.ball.y >= 400 - this.gameState.ball.radius) {
                     this.gameState.ball.dy = -this.gameState.ball.dy;
                 }
                 
-                // Collisioni paddle
                 this.checkPaddleCollisions();
                 
-                // Goal detection
                 if (this.gameState.ball.x < 0) {
                     this.gameState.score2++;
                     this.resetBall();
@@ -1041,7 +982,6 @@
             }
 
             checkPaddleCollisions() {
-                // Paddle sinistro
                 if (this.gameState.ball.x <= 35 && 
                     this.gameState.ball.y >= this.gameState.paddle1.y && 
                     this.gameState.ball.y <= this.gameState.paddle1.y + this.settings.paddleSize) {
@@ -1050,7 +990,6 @@
                     this.gameState.ball.dy += hitPos * 3;
                 }
                 
-                // Paddle destro
                 if (this.gameState.ball.x >= 765 && 
                     this.gameState.ball.y >= this.gameState.paddle2.y && 
                     this.gameState.ball.y <= this.gameState.paddle2.y + this.settings.paddleSize) {
@@ -1094,18 +1033,24 @@
 
             // CONTROLLI
             initControls() {
-                // Controlli tastiera
                 document.addEventListener('keydown', (e) => {
-                    this.keys[e.key.toLowerCase()] = true;
-                    this.handleInput();
+                    if (this.currentScreen === 'loginScreen') {
+                        if (e.key === 'Enter') {
+                            attemptLogin();
+                        }
+                    } else {
+                        this.keys[e.key.toLowerCase()] = true;
+                        this.handleInput();
+                    }
                 });
                 
                 document.addEventListener('keyup', (e) => {
-                    this.keys[e.key.toLowerCase()] = false;
-                    this.handleInput();
+                    if (this.currentScreen !== 'loginScreen') {
+                        this.keys[e.key.toLowerCase()] = false;
+                        this.handleInput();
+                    }
                 });
 
-                // Controlli mouse
                 this.setupMouseControls();
                 this.setupMobileControls();
             }
@@ -1119,15 +1064,12 @@
                     const rect = this.canvas.getBoundingClientRect();
                     const mouseY = e.clientY - rect.top;
                     
-                    // Calcola posizione racchetta basata sul mouse
                     const paddleY = Math.max(0, Math.min(300, mouseY - this.settings.paddleSize / 2));
                     
                     if (this.gameMode === 'single') {
-                        // In single player, mouse controlla player 1
                         this.gameState.paddle1.y = paddleY;
-                        this.gameState.paddle1.dy = 0; // Ferma movimento tastiera
+                        this.gameState.paddle1.dy = 0;
                     } else if (this.gameMode === 'multi' && this.playerId) {
-                        // In multiplayer, mouse controlla la tua racchetta
                         if (this.playerId === 1) {
                             this.sendMouseInput(paddleY);
                         } else if (this.playerId === 2) {
@@ -1136,7 +1078,6 @@
                     }
                 });
 
-                // Disabilita il menu contestuale del mouse sul canvas
                 this.canvas.addEventListener('contextmenu', (e) => {
                     e.preventDefault();
                 });
@@ -1156,7 +1097,6 @@
 
                 const speed = 8;
                 
-                // Player 1 controls
                 if (this.keys['q']) {
                     this.gameState.paddle1.dy = -speed;
                 } else if (this.keys['a']) {
@@ -1165,18 +1105,16 @@
                     this.gameState.paddle1.dy = 0;
                 }
                 
-                // Player 2 controls (solo in single player)
                 if (this.gameMode === 'single') {
                     if (this.keys['p']) {
                         this.gameState.paddle2.dy = -speed;
                     } else if (this.keys['l']) {
                         this.gameState.paddle2.dy = speed;
                     } else if (!this.keys['p'] && !this.keys['l']) {
-                        // AI prende il controllo se non si preme niente
+                        // AI prende il controllo
                     }
                 }
 
-                // Invia input al server se multiplayer
                 if (this.gameMode === 'multi' && this.ws && this.ws.readyState === WebSocket.OPEN) {
                     let input = null;
                     if (this.playerId === 1) {
@@ -1261,11 +1199,9 @@
             render() {
                 if (!this.canvas || !this.ctx) return;
 
-                // Sfondo
                 this.ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
                 this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
                 
-                // Linea centrale
                 this.ctx.strokeStyle = '#00ff88';
                 this.ctx.lineWidth = 2;
                 this.ctx.setLineDash([10, 10]);
@@ -1275,16 +1211,13 @@
                 this.ctx.stroke();
                 this.ctx.setLineDash([]);
                 
-                // Paddle 1
                 this.ctx.fillStyle = '#00ff88';
                 this.ctx.fillRect(this.gameState.paddle1.x, this.gameState.paddle1.y, 
                                 this.gameState.paddle1.width, this.gameState.paddle1.height);
                 
-                // Paddle 2
                 this.ctx.fillRect(this.gameState.paddle2.x, this.gameState.paddle2.y, 
                                 this.gameState.paddle2.width, this.gameState.paddle2.height);
                 
-                // Palla con effetto glow
                 this.ctx.shadowColor = '#00ff88';
                 this.ctx.shadowBlur = 15;
                 this.ctx.beginPath();
@@ -1295,7 +1228,7 @@
             }
         }
 
-        // FUNZIONI GLOBALI PER L'INTERFACCIA
+        // FUNZIONI GLOBALI
         let game;
 
         function showScreen(screenId) {
@@ -1372,7 +1305,6 @@
             game.showAbout();
         }
 
-        // Inizializza il gioco
         window.addEventListener('load', () => {
             game = new PongUltimate();
         });
