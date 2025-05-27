@@ -1,4 +1,112 @@
-<!DOCTYPE html>
+// SISTEMA UTENTI
+            login(username, password) {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({
+                        type: 'login',
+                        username: username,
+                        password: password
+                    }));
+                } else {
+                    // Connetti prima al server per login
+                    this.connectForAuth(() => {
+                        this.ws.send(JSON.stringify({
+                            type: 'login',
+                            username: username,
+                            password: password
+                        }));
+                    });
+                }
+            }
+
+            register(username, password) {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({
+                        type: 'register',
+                        username: username,
+                        password: password
+                    }));
+                } else {
+                    this.connectForAuth(() => {
+                        this.ws.send(JSON.stringify({
+                            type: 'register',
+                            username: username,
+                            password: password
+                        }));
+                    });
+                }
+            }
+
+            connectForAuth(callback) {
+                const isGlitch = window.location.hostname.includes('glitch.me');
+                const serverUrl = isGlitch ? `wss://${window.location.hostname}` : 
+                                            `ws://${this.settings.serverIP}:${this.settings.serverPort}`;
+                
+                this.ws = new WebSocket(serverUrl);
+                this.ws.onopen = () => {
+                    if (callback) callback();
+                };
+                this.ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    this.handleAuthMessage(data);
+                };
+            }
+
+            handleAuthMessage(data) {
+                switch (data.type) {
+                    case 'loginResult':
+                        if (data.success) {
+                            this.currentUser = {
+                                username: data.username,
+                                stats: data.stats
+                            };
+                            localStorage.setItem('pong_user', JSON.stringify(this.currentUser));
+                            this.showMainMenu();
+                            document.getElementById('loginMessage').textContent = '';
+                        } else {
+                            document.getElementById('loginMessage').textContent = data.message;
+                            document.getElementById('loginMessage').style.color = '#ff4444';
+                        }
+                        break;
+                    case 'registerResult':
+                        if (data.success) {
+                            document.getElementById('loginMessage').textContent = data.message;
+                            document.getElementById('loginMessage').style.color = '#00ff88';
+                        } else {
+                            document.getElementById('loginMessage').textContent = data.message;
+                            document.getElementById('loginMessage').style.color = '#ff4444';
+                        }
+                        break;
+                    case 'userStats':
+                        this.showStatsModal(data.username, data.stats);
+                        break;
+                }
+            }
+
+            logout() {
+                localStorage.removeItem('pong_user');
+                this.currentUser = null;
+                if (this.ws) {
+                    this.ws.close();
+                    this.ws = null;
+                }
+                this.showScreen('loginScreen');
+                document.getElementById('loginMessage').textContent = '';
+            }
+
+            getUserStats() {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({ type: 'getStats' }));
+                }
+            }
+
+            showStatsModal(username, stats) {
+                const winRate = stats.games > 0 ? ((stats.wins / stats.games) * 100).toFixed(1) : 0;
+                alert(`📊 Statistiche di ${username}\n\n` +
+                      `🏆 Vittorie: ${stats.wins}\n` +
+                      `💔 Sconfitte: ${stats.losses}\n` +
+                      `🎮 Partite totali: ${stats.games}\n` +
+                      `📈 Percentuale vittorie: ${winRate}%`);
+            }<!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
@@ -337,12 +445,45 @@
 </head>
 <body>
     <div class="container">
-        <!-- MENU PRINCIPALE -->
-        <div class="screen active" id="mainMenu">
+        <!-- LOGIN -->
+        <div class="screen active" id="loginScreen">
             <div class="main-menu">
                 <div class="logo">🏓 PONG ULTIMATE</div>
+                <h2 style="margin-bottom: 30px;">Accedi o Registrati</h2>
+                
+                <div class="settings-panel" style="max-width: 400px;">
+                    <div class="setting-group">
+                        <label class="setting-label">Username:</label>
+                        <input type="text" class="setting-input" id="loginUsername" placeholder="Inserisci username" maxlength="20">
+                    </div>
+                    <div class="setting-group">
+                        <label class="setting-label">Password:</label>
+                        <input type="password" class="setting-input" id="loginPassword" placeholder="Inserisci password" maxlength="50">
+                    </div>
+                    <div style="display: flex; gap: 15px; margin-top: 20px;">
+                        <button class="menu-button" style="min-width: auto; flex: 1;" onclick="attemptLogin()">🔑 LOGIN</button>
+                        <button class="menu-button" style="min-width: auto; flex: 1;" onclick="attemptRegister()">✨ REGISTRATI</button>
+                    </div>
+                    <div id="loginMessage" style="margin-top: 15px; text-align: center; color: #ff4444;"></div>
+                </div>
+
+                <div style="margin-top: 30px; padding: 20px; background: rgba(0,255,136,0.1); border-radius: 15px; border: 1px solid #00ff88;">
+                    <h3>🎮 Account Demo:</h3>
+                    <p><strong>Username:</strong> guest1 <strong>Password:</strong> password</p>
+                    <p><strong>Username:</strong> guest2 <strong>Password:</strong> password</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- MENU PRINCIPALE -->
+        <div class="screen" id="mainMenu">
+            <div class="main-menu">
+                <div class="logo">🏓 PONG ULTIMATE</div>
+                <div id="welcomeMessage" style="margin-bottom: 20px; color: #00ff88; font-size: 18px;"></div>
                 <button class="menu-button" onclick="showScreen('modeSelect')">🎮 GIOCA</button>
                 <button class="menu-button" onclick="showScreen('settings')">⚙️ IMPOSTAZIONI</button>
+                <button class="menu-button" onclick="showUserStats()">📊 STATISTICHE</button>
+                <button class="menu-button" onclick="logout()">🚪 LOGOUT</button>
                 <button class="menu-button" onclick="showAbout()">ℹ️ INFO</button>
             </div>
         </div>
@@ -398,12 +539,12 @@
                 
                 <div class="player-status">
                     <div class="player-card" id="player1Card">
-                        <h3>Giocatore 1</h3>
+                        <h3 id="player1Name">Giocatore 1</h3>
                         <p id="player1Status">In attesa...</p>
                         <button class="ready-button" id="readyButton1" onclick="toggleReady()" style="display: none;">PRONTO</button>
                     </div>
                     <div class="player-card" id="player2Card">
-                        <h3>Giocatore 2</h3>
+                        <h3 id="player2Name">Giocatore 2</h3>
                         <p id="player2Status">In attesa...</p>
                     </div>
                 </div>
@@ -427,15 +568,15 @@
                     <div class="control-group">
                         <div>Giocatore 1 (Sinistra)</div>
                         <div class="keys">
-                            <div class="key">Q</div>
-                            <div class="key">A</div>
+                            <div class="key">Q/A</div>
+                            <div class="key">Mouse</div>
                         </div>
                     </div>
                     <div class="control-group">
                         <div>Giocatore 2 (Destra)</div>
                         <div class="keys">
-                            <div class="key">P</div>
-                            <div class="key">L</div>
+                            <div class="key">P/L</div>
+                            <div class="key">Mouse</div>
                         </div>
                     </div>
                 </div>
@@ -462,12 +603,13 @@
     <script>
         class PongUltimate {
             constructor() {
-                this.currentScreen = 'mainMenu';
+                this.currentScreen = 'loginScreen'; // Inizia con login
                 this.gameMode = null; // 'single' or 'multi'
                 this.ws = null;
                 this.playerId = null;
                 this.playerReady = false;
                 this.opponentReady = false;
+                this.currentUser = null; // Utente loggato
                 
                 // Impostazioni
                 this.settings = {
@@ -493,6 +635,29 @@
                 this.initCanvas();
                 this.initControls();
                 this.loadSettings();
+                this.checkAutoLogin();
+            }
+
+            checkAutoLogin() {
+                // Controlla se ci sono credenziali salvate
+                const savedUser = localStorage.getItem('pong_user');
+                if (savedUser) {
+                    try {
+                        const userData = JSON.parse(savedUser);
+                        this.currentUser = userData;
+                        this.showMainMenu();
+                    } catch (e) {
+                        localStorage.removeItem('pong_user');
+                    }
+                }
+            }
+
+            showMainMenu() {
+                this.showScreen('mainMenu');
+                if (this.currentUser) {
+                    document.getElementById('welcomeMessage').textContent = 
+                        `👋 Benvenuto, ${this.currentUser.username}!`;
+                }
             }
 
             // GESTIONE SCHERMATE
@@ -807,6 +972,7 @@
 
             // CONTROLLI
             initControls() {
+                // Controlli tastiera
                 document.addEventListener('keydown', (e) => {
                     this.keys[e.key.toLowerCase()] = true;
                     this.handleInput();
@@ -817,7 +983,50 @@
                     this.handleInput();
                 });
 
+                // Controlli mouse
+                this.setupMouseControls();
                 this.setupMobileControls();
+            }
+
+            setupMouseControls() {
+                if (!this.canvas) return;
+
+                this.canvas.addEventListener('mousemove', (e) => {
+                    if (this.currentScreen !== 'gameScreen' || !this.gameState.gameRunning) return;
+                    
+                    const rect = this.canvas.getBoundingClientRect();
+                    const mouseY = e.clientY - rect.top;
+                    
+                    // Calcola posizione racchetta basata sul mouse
+                    const paddleY = Math.max(0, Math.min(300, mouseY - this.settings.paddleSize / 2));
+                    
+                    if (this.gameMode === 'single') {
+                        // In single player, mouse controlla player 1
+                        this.gameState.paddle1.y = paddleY;
+                        this.gameState.paddle1.dy = 0; // Ferma movimento tastiera
+                    } else if (this.gameMode === 'multi' && this.playerId) {
+                        // In multiplayer, mouse controlla la tua racchetta
+                        if (this.playerId === 1) {
+                            this.sendMouseInput(paddleY);
+                        } else if (this.playerId === 2) {
+                            this.sendMouseInput(paddleY);
+                        }
+                    }
+                });
+
+                // Disabilita il menu contestuale del mouse sul canvas
+                this.canvas.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                });
+            }
+
+            sendMouseInput(paddleY) {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({ 
+                        type: 'mouseInput', 
+                        paddleY: paddleY 
+                    }));
+                }
             }
 
             handleInput() {
@@ -970,6 +1179,48 @@
         function showScreen(screenId) {
             if (!game) game = new PongUltimate();
             game.showScreen(screenId);
+        }
+
+        function attemptLogin() {
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value.trim();
+            
+            if (!username || !password) {
+                document.getElementById('loginMessage').textContent = 'Inserisci username e password';
+                document.getElementById('loginMessage').style.color = '#ff4444';
+                return;
+            }
+            
+            if (!game) game = new PongUltimate();
+            game.login(username, password);
+        }
+
+        function attemptRegister() {
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value.trim();
+            
+            if (!username || !password) {
+                document.getElementById('loginMessage').textContent = 'Inserisci username e password';
+                document.getElementById('loginMessage').style.color = '#ff4444';
+                return;
+            }
+            
+            if (!game) game = new PongUltimate();
+            game.register(username, password);
+        }
+
+        function logout() {
+            if (game) game.logout();
+        }
+
+        function showUserStats() {
+            if (game) {
+                if (game.currentUser) {
+                    game.showStatsModal(game.currentUser.username, game.currentUser.stats);
+                } else {
+                    alert('Devi effettuare il login per vedere le statistiche!');
+                }
+            }
         }
 
         function startSinglePlayer() {
