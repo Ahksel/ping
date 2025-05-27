@@ -774,24 +774,41 @@
                     
                     this.ws.onopen = () => {
                         console.log('✅ WebSocket connesso!');
-                        document.getElementById('lobbyStatus').textContent = 'Connesso! Effettuando login...';
+                        document.getElementById('lobbyStatus').textContent = 'Connesso! Verificando autenticazione...';
                         
-                        if (this.currentUser) {
-                            console.log('🔑 Auto-login per:', this.currentUser.username);
-                            this.ws.send(JSON.stringify({
-                                type: 'login',
-                                username: this.currentUser.username,
-                                password: 'dummy'
-                            }));
-                        }
+                        // Prima controlla se siamo già autenticati
+                        console.log('🔍 Controllo autenticazione esistente...');
+                        this.ws.send(JSON.stringify({ type: 'checkAuth' }));
                     };
                     
                     this.ws.onmessage = (event) => {
                         const data = JSON.parse(event.data);
                         
-                        if (data.type === 'loginResult') {
+                        if (data.type === 'authResult') {
                             if (data.success) {
-                                console.log('✅ Auto-login riuscito, entro in lobby...');
+                                console.log('✅ Già autenticato come:', data.username);
+                                document.getElementById('lobbyStatus').textContent = 'Autenticato! Entrando in lobby...';
+                                // La joinLobby viene chiamata automaticamente dal server
+                            } else {
+                                console.log('❌ Non autenticato, effettuo login...');
+                                document.getElementById('lobbyStatus').textContent = 'Effettuando login...';
+                                
+                                // Se non autenticato, fai login
+                                if (this.currentUser) {
+                                    // Per il multiplayer, usiamo le credenziali salvate
+                                    // Ma dobbiamo usare la password vera, non "dummy"
+                                    const savedPassword = localStorage.getItem('pong_temp_password');
+                                    
+                                    this.ws.send(JSON.stringify({
+                                        type: 'login',
+                                        username: this.currentUser.username,
+                                        password: savedPassword || 'password' // Fallback per account demo
+                                    }));
+                                }
+                            }
+                        } else if (data.type === 'loginResult') {
+                            if (data.success) {
+                                console.log('✅ Login riuscito, entro in lobby...');
                                 document.getElementById('lobbyStatus').textContent = 'Login effettuato! Entrando in lobby...';
                                 
                                 setTimeout(() => {
@@ -799,8 +816,9 @@
                                     this.ws.send(JSON.stringify({ type: 'joinLobby' }));
                                 }, 500);
                             } else {
-                                console.error('❌ Auto-login fallito:', data.message);
+                                console.error('❌ Login fallito:', data.message);
                                 document.getElementById('lobbyStatus').textContent = 'Errore login: ' + data.message;
+                                document.getElementById('lobbyStatus').style.borderColor = '#ff4444';
                             }
                         } else {
                             this.handleServerMessage(data);
@@ -1245,6 +1263,9 @@
                 document.getElementById('loginMessage').style.color = '#ff4444';
                 return;
             }
+            
+            // Salva temporaneamente la password per il multiplayer
+            localStorage.setItem('pong_temp_password', password);
             
             if (!game) game = new PongUltimate();
             game.login(username, password);
