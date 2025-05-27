@@ -45,9 +45,15 @@ class PongServerDB {
 
     async initDatabase() {
         try {
+            console.log('🔌 Tentativo connessione MongoDB...');
+            console.log('📍 URL:', this.mongoUrl ? 'Configurato' : 'NON configurato');
+            
             this.client = new MongoClient(this.mongoUrl);
             await this.client.connect();
             this.db = this.client.db(this.dbName);
+            
+            // Test connessione
+            await this.db.admin().ping();
             
             // Crea collezioni se non esistono
             await this.db.createCollection('users');
@@ -56,11 +62,31 @@ class PongServerDB {
             // Crea utenti demo se non esistono
             await this.createDemoUsers();
             
-            console.log('✅ Database MongoDB connesso!');
+            console.log('✅ Database MongoDB connesso e pronto!');
         } catch (error) {
-            console.error('❌ Errore inizializzazione database:', error);
-            throw error;
+            console.error('❌ Errore inizializzazione database:', error.message);
+            console.log('⚠️  Continuo senza database - userò utenti demo in memoria');
+            this.db = null; // Forza fallback
+            this.createDemoUsersInMemory();
         }
+    }
+
+    createDemoUsersInMemory() {
+        // Fallback: utenti in memoria se DB non funziona
+        this.users = new Map();
+        this.users.set('guest1', {
+            password: 'password',
+            stats: { wins: 5, losses: 3, games: 8 }
+        });
+        this.users.set('guest2', {
+            password: 'password',
+            stats: { wins: 2, losses: 6, games: 8 }
+        });
+        this.users.set('admin', {
+            password: 'admin123',
+            stats: { wins: 10, losses: 2, games: 12 }
+        });
+        console.log('📝 Utenti demo caricati in memoria');
     }
 
     async createDemoUsers() {
@@ -263,7 +289,10 @@ class PongServerDB {
     async handleRegister(ws, message) {
         const { username, password } = message;
         
+        console.log(`📝 Tentativo registrazione: ${username}`);
+        
         if (!username || !password || username.length < 3 || password.length < 3) {
+            console.log('❌ Dati registrazione non validi');
             ws.send(JSON.stringify({ 
                 type: 'registerResult', 
                 success: false, 
@@ -274,9 +303,11 @@ class PongServerDB {
 
         try {
             if (this.db) {
+                console.log('💾 Usando database MongoDB');
                 // Controlla se utente esiste già
                 const existingUser = await this.db.collection('users').findOne({ username });
                 if (existingUser) {
+                    console.log(`❌ Username ${username} già esistente`);
                     ws.send(JSON.stringify({ 
                         type: 'registerResult', 
                         success: false, 
@@ -286,33 +317,54 @@ class PongServerDB {
                 }
 
                 // Crea nuovo utente
-                await this.db.collection('users').insertOne({
+                const newUser = {
                     username: username,
                     password: password,
                     stats: { wins: 0, losses: 0, games: 0 },
                     createdAt: new Date()
-                });
+                };
+                
+                await this.db.collection('users').insertOne(newUser);
+                console.log(`✅ Utente ${username} registrato nel database`);
 
                 ws.send(JSON.stringify({ 
                     type: 'registerResult', 
                     success: true, 
                     message: 'Registrazione completata! Ora puoi fare il login.' 
                 }));
-
-                console.log(`✨ Nuovo utente registrato: ${username}`);
             } else {
+                console.log('📝 Usando memoria (database non disponibile)');
+                // Fallback: usa memoria
+                if (this.users && this.users.has(username)) {
+                    ws.send(JSON.stringify({ 
+                        type: 'registerResult', 
+                        success: false, 
+                        message: 'Username già esistente' 
+                    }));
+                    return;
+                }
+
+                if (!this.users) this.users = new Map();
+                this.users.set(username, {
+                    password: password,
+                    stats: { wins: 0, losses: 0, games: 0 }
+                });
+
+                console.log(`✅ Utente ${username} registrato in memoria`);
                 ws.send(JSON.stringify({ 
                     type: 'registerResult', 
-                    success: false, 
-                    message: 'Database non disponibile' 
+                    success: true, 
+                    message: 'Registrazione completata! (Memoria temporanea)' 
                 }));
             }
+
+            console.log(`🎉 Registrazione ${username} completata con successo`);
         } catch (error) {
-            console.error('Errore registrazione:', error);
+            console.error('💥 Errore registrazione:', error);
             ws.send(JSON.stringify({ 
                 type: 'registerResult', 
                 success: false, 
-                message: 'Errore del server' 
+                message: 'Errore del server durante la registrazione' 
             }));
         }
     }
