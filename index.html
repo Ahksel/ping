@@ -1,4 +1,30 @@
-<!DOCTYPE html>
+// MODALITÀ MULTIPLAYER - Versione Semplificata
+            startMultiplayer() {
+                if (!this.currentUser) {
+                    alert('Devi effettuare il login per giocare online!');
+                    return;
+                }
+                console.log('🌐 Avvio multiplayer per:', this.currentUser.username);
+                this.gameMode = 'multi';
+                this.showScreen('lobby');
+                this.connectToServerSimple();
+            }
+
+            connectToServerSimple() {
+                // URL per Render (modifica se usi altro servizio)
+                const serverUrl = `wss://${window.location.hostname}`;
+                
+                document.getElementById('lobbyStatus').textContent = 'Connessione al server...';
+                console.log('🔌 Connessione a:', serverUrl);
+                
+                try {
+                    this.ws = new WebSocket(serverUrl);
+                    
+                    this.ws.onopen = () => {
+                        console.log('✅ WebSocket connesso! Facendo login...');
+                        document.getElementById('lobbyStatus').textContent = 'Connesso! Login in corso...';
+                        
+                        // Login IMMEDI<!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
@@ -599,12 +625,15 @@
             }
 
             connectForAuth(callback) {
-                const isGlitch = window.location.hostname.includes('glitch.me');
-                const serverUrl = isGlitch ? `wss://${window.location.hostname}` : 
-                                            `ws://${this.settings.serverIP}:${this.settings.serverPort}`;
+                // SEMPRE usa WSS per HTTPS (come Render)
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const serverUrl = `${protocol}//${window.location.hostname}`;
+                
+                console.log('🔌 Connessione auth a:', serverUrl);
                 
                 this.ws = new WebSocket(serverUrl);
                 this.ws.onopen = () => {
+                    console.log('✅ WebSocket auth connesso!');
                     if (callback) callback();
                 };
                 this.ws.onmessage = (event) => {
@@ -612,7 +641,7 @@
                     this.handleAuthMessage(data);
                 };
                 this.ws.onerror = (error) => {
-                    console.error('Errore connessione auth:', error);
+                    console.error('❌ Errore connessione auth:', error);
                     document.getElementById('loginMessage').textContent = 'Errore di connessione al server';
                     document.getElementById('loginMessage').style.color = '#ff4444';
                 };
@@ -1263,6 +1292,8 @@
             const username = document.getElementById('loginUsername').value.trim();
             const password = document.getElementById('loginPassword').value.trim();
             
+            console.log('🔑 Tentativo login:', username);
+            
             if (!username || !password) {
                 document.getElementById('loginMessage').textContent = 'Inserisci username e password';
                 document.getElementById('loginMessage').style.color = '#ff4444';
@@ -1273,6 +1304,21 @@
             localStorage.setItem('pong_temp_password', password);
             
             if (!game) game = new PongUltimate();
+            
+            // Per ora, login automatico per account demo
+            if ((username === 'guest1' || username === 'guest2') && password === 'password') {
+                console.log('✅ Login demo riuscito');
+                game.currentUser = {
+                    username: username,
+                    stats: { wins: 0, losses: 0, games: 0 }
+                };
+                localStorage.setItem('pong_user', JSON.stringify(game.currentUser));
+                game.showMainMenu();
+                document.getElementById('loginMessage').textContent = '';
+                return;
+            }
+            
+            // Per altri account, prova il login normale
             game.login(username, password);
         }
 
