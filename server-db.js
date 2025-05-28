@@ -14,7 +14,7 @@ class PongServerDB {
         console.log('🔍 DEBUG - Valore:', process.env.MONGODB_URL);
         
         // TEMPORANEO: Forza la connection string se non trovata
-        this.mongoUrl = process.env.MONGODB_URL || 'mongodb+srv://ponguser:c86sMF3YorkCvjvi@cluster0.yafsbkq.mongodb.net/pongultimate?retryWrites=true&w=majority';
+        this.mongoUrl = process.env.MONGODB_URL || 'mongodb+srv://ponguser:prova123@cluster0.yafsbkq.mongodb.net/pongultimate?retryWrites=true&w=majority';
         console.log('🔧 USANDO URL:', this.mongoUrl.includes('mongodb+srv') ? 'ATLAS' : 'LOCALHOST');
         
         this.dbName = 'pongultimate';
